@@ -52,6 +52,12 @@
     #board.placing { cursor: crosshair; }
     .map-tiles, .map-markers { pointer-events: none; }
     .map-tiles { opacity: .93; }
+    .catchment-rings { pointer-events: none; }
+    .catchment-ring { fill: #467de2; fill-opacity: .045; stroke: #376bc4; stroke-opacity: .5; }
+    .catchment-ring.selected-outer { fill-opacity: .07; stroke-opacity: .95; }
+    .catchment-ring.middle { fill: #5295e6; fill-opacity: .08; stroke: #2878d0; stroke-opacity: .8; }
+    .catchment-ring.inner { fill: #2563eb; fill-opacity: .1; stroke: #1d4ed8; stroke-opacity: .9; }
+    .catchment-distance { fill: #174c97; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: white; stroke-width: 3px; }
     .track { fill: none; stroke: #303e4d; stroke-linecap: round; }
     .platform { fill: #e8edf1; stroke: #778594; }
     .platform-inset { fill: none; stroke: #b6c0ca; }
@@ -92,6 +98,8 @@
     .map-data-body th, .map-data-body td { padding: 4px 3px; border-bottom: 1px solid #e6eaf0; text-align: left; }
     .map-data-body td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
     .map-data-body a, .map-credit a { color: #2d5aa7; }
+    .demand-overview { margin-top: 7px; padding: 9px 12px; border: 1px solid #bfd4f3; border-radius: 10px; background: #f2f7ffef; color: #1b497f; font-size: 12px; font-weight: 750; box-shadow: 0 2px 8px #15283f12; }
+    .demand-overview small { display: block; margin-top: 3px; font-size: 10px; font-weight: 500; color: #566c89; }
     .zoom-controls { position: absolute; z-index: 2; right: 14px; top: 14px; display: grid; gap: 7px; }
     .zoom-controls button { width: 42px; height: 42px; border-radius: 10px; border: 1px solid #d5dee7; background: #ffffffed; color: #203047; font-size: 24px; cursor: pointer; box-shadow: 0 2px 7px #15283f16; }
     .zoom-controls button:focus-visible { outline: 3px solid #86b3ff; }
@@ -114,6 +122,9 @@
     .editor-rotation label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
     .editor-rotation output { min-width: 43px; font-size: 12px; color: #203047; font-variant-numeric: tabular-nums; text-align: right; }
+    .station-demand { margin-top: 9px; padding-top: 8px; border-top: 1px solid #e4edf9; color: #1b497f; font-size: 11px; line-height: 1.6; }
+    .station-demand strong { font-size: 13px; }
+    .station-demand[hidden] { display: none; }
     .editor-heading button:focus-visible { outline: 3px solid #86b3ff; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
@@ -177,6 +188,7 @@
       <svg id="board" viewBox="0 0 1440 820" preserveAspectRatio="xMidYMid meet" role="img" aria-label="配線図を作成する白紙のキャンバス">
         <g id="map-tiles" class="map-tiles"></g>
         <g id="map-markers" class="map-markers"></g>
+        <g id="catchment-rings" class="catchment-rings"></g>
         <g id="placed"></g>
         <g id="preview" class="preview" visibility="hidden"></g>
       </svg>
@@ -206,10 +218,12 @@
             </table>
             <p><strong>掲載商業拠点：</strong>みなくる刈谷／アピタ刈谷店／ルビットタウン刈谷／イオンタウン刈谷／刈谷ハイウェイオアシス</p>
             <p><strong>掲載工業拠点：</strong>デンソー本社／豊田自動織機 本社・刈谷工場／デンソー高棚製作所</p>
-            <p>全店舗・全事業所を表示したものではありません。2026年町別人口は出典先のCSVにありますが、地図への町別人口の割り当ては未実装です。</p>
-            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">人口（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計（市公式）</a></p>
+            <p>全店舗・全事業所を表示したものではありません。駅の集客人口には国土交通省の250m人口メッシュ（2020年国勢調査ベース、2025年推計）を使用。2026年の住民基本台帳人口とは集計基準が異なります。</p>
+            <p><strong>徒歩集客ルール：</strong>駅から0〜400mは係数100%、400〜600mは65%、600〜800mは30%。800m超は対象外。250mメッシュを細分化して計算し、重なる場合は最寄りの設置駅に一度だけ配分します。数値は実際の乗車人数ではなく、距離で補正した潜在利用者人口です。</p>
+            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">人口（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計（市公式）</a> · <a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-mesh250r6.html" target="_blank" rel="noopener noreferrer">250m人口メッシュ（国交省）</a></p>
           </div>
         </details>
+        <div id="demand-overview" class="demand-overview" role="status" aria-live="polite">徒歩集客圏：人口データを読み込み中…</div>
       </div>
       <div class="zoom-controls" aria-label="地図の拡大縮小">
         <button type="button" id="zoom-in" aria-label="拡大">＋</button>
@@ -225,6 +239,7 @@
           <input id="station-angle" type="range" min="0" max="359.9" step="0.1" value="0" aria-label="駅の回転角度">
           <output id="station-angle-value" for="station-angle">0.0°</output>
         </div>
+        <div id="station-demand" class="station-demand" hidden></div>
       </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
@@ -237,6 +252,7 @@
       const svg = document.querySelector('#board');
       const mapTiles = document.querySelector('#map-tiles');
       const mapMarkers = document.querySelector('#map-markers');
+      const catchmentRings = document.querySelector('#catchment-rings');
       const placed = document.querySelector('#placed');
       const preview = document.querySelector('#preview');
       const button = document.querySelector('#place-tool');
@@ -249,6 +265,8 @@
       const stationInfo = document.querySelector('#selected-station-info');
       const stationAngle = document.querySelector('#station-angle');
       const stationAngleValue = document.querySelector('#station-angle-value');
+      const stationDemand = document.querySelector('#station-demand');
+      const demandOverview = document.querySelector('#demand-overview');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
       const touches = new Map();
@@ -258,7 +276,13 @@
       const BASE_MAP_ZOOM = 13;
       const EARTH_RADIUS_METERS = 6378137; // 地理院タイルのWebメルカトル図法と同じ球体半径
       const CAR_LENGTH_METERS = 20;
+      const WALK_CATCHMENT_METERS = 800;
+      const WALK_CATCHMENT_SQUARED = WALK_CATCHMENT_METERS ** 2;
+      const POPULATION_SAMPLES_PER_SIDE = 4;
       const MAP_CENTER = { lat: 35.004, lon: 137.012 };
+      // 刈谷市近傍の距離判定用。地域全体で緯度差が小さいので局所正距近似とする。
+      const METERS_PER_DEGREE = EARTH_RADIUS_METERS * Math.PI / 180;
+      const METERS_PER_DEGREE_LON = METERS_PER_DEGREE * Math.cos(MAP_CENTER.lat * Math.PI / 180);
       // 駅座標：OpenStreetMap、年度別乗車・乗降：刈谷の統計（令和7年版、2024年度実績）。
       const railStations = [
         { name: '刈谷', lat: 34.99116, lon: 137.00887, kind: 'interchange', jrBoardings: 10586000, meitetsuTraffic: 8669000 },
@@ -297,6 +321,147 @@
       let panStart = null;
       let mousePanStart = null;
       let renderedTiles = '';
+      let populationSamples = [];
+      let populationState = 'loading';
+      let demandRevision = 0;
+      let calculatedDemandRevision = -1;
+      let demandByStation = new Map();
+      let totalWeightedDemand = 0;
+
+      // 配布用の250mメッシュを約62.5m間隔で標本化する。
+      // 面積の一部分だけが800m圏内にかかる場合も、人口を丸ごと算入しない。
+      function preparePopulationSamples(cells) {
+        const samples = [];
+        for (const [lon, lat, population, halfLon, halfLat] of cells) {
+          if (!(population > 0)) continue;
+          for (let y = 0; y < POPULATION_SAMPLES_PER_SIDE; y++) {
+            for (let x = 0; x < POPULATION_SAMPLES_PER_SIDE; x++) {
+              const sampleLon = lon + ((x + .5) / POPULATION_SAMPLES_PER_SIDE * 2 - 1) * halfLon;
+              const sampleLat = lat + ((y + .5) / POPULATION_SAMPLES_PER_SIDE * 2 - 1) * halfLat;
+              samples.push({
+                x: (sampleLon - MAP_CENTER.lon) * METERS_PER_DEGREE_LON,
+                y: (sampleLat - MAP_CENTER.lat) * METERS_PER_DEGREE,
+                population: population / POPULATION_SAMPLES_PER_SIDE ** 2
+              });
+            }
+          }
+        }
+        return samples;
+      }
+
+      function catchmentWeight(distanceSquared) {
+        if (distanceSquared <= 400 ** 2) return 1;
+        if (distanceSquared <= 600 ** 2) return .65;
+        if (distanceSquared <= WALK_CATCHMENT_SQUARED) return .30;
+        return 0;
+      }
+
+      function calculateDemand() {
+        if (calculatedDemandRevision === demandRevision) return;
+        calculatedDemandRevision = demandRevision;
+        demandByStation = new Map();
+        totalWeightedDemand = 0;
+        if (populationState !== 'ready') return;
+        const stations = positions.filter(position => position.mode === 'kariya').map(position => {
+          demandByStation.set(position.id, { covered: 0, weighted: 0 });
+          return {
+            id: position.id,
+            x: (position.lon - MAP_CENTER.lon) * METERS_PER_DEGREE_LON,
+            y: (position.lat - MAP_CENTER.lat) * METERS_PER_DEGREE
+          };
+        });
+        for (const sample of populationSamples) {
+          let nearestId = null;
+          let nearestSquared = WALK_CATCHMENT_SQUARED;
+          for (const station of stations) {
+            const dx = sample.x - station.x;
+            const dy = sample.y - station.y;
+            const squared = dx * dx + dy * dy;
+            if (squared <= nearestSquared) {
+              nearestSquared = squared;
+              nearestId = station.id;
+            }
+          }
+          if (nearestId === null) continue;
+          const stats = demandByStation.get(nearestId);
+          stats.covered += sample.population;
+          stats.weighted += sample.population * catchmentWeight(nearestSquared);
+        }
+        totalWeightedDemand = [...demandByStation.values()].reduce((sum, stats) => sum + stats.weighted, 0);
+      }
+
+      function renderCatchmentRings() {
+        if (mapMode !== 'kariya') {
+          catchmentRings.replaceChildren();
+          return;
+        }
+        const visibleStations = positions.filter(position => position.mode === 'kariya');
+        const zoom = canvasSize.width / view.width;
+        const rings = [];
+        for (const position of visibleStations) {
+          const point = geoToCanvas(position.lon, position.lat);
+          const meters = canvasUnitsPerMeter(position.lat);
+          const selected = position.id === selectedStationId;
+          for (const radius of (selected ? [800, 600, 400] : [800])) {
+            const ring = document.createElementNS(SVG_NS, 'circle');
+            ring.setAttribute('class', `catchment-ring${selected && radius === 800 ? ' selected-outer' : ''}${radius === 600 ? ' middle' : ''}${radius === 400 ? ' inner' : ''}`);
+            ring.setAttribute('cx', String(point.x));
+            ring.setAttribute('cy', String(point.y));
+            ring.setAttribute('r', String(radius * meters));
+            ring.setAttribute('stroke-width', String((selected ? 2 : 1) / zoom));
+            rings.push(ring);
+            if (selected) {
+              const label = document.createElementNS(SVG_NS, 'text');
+              label.setAttribute('class', 'catchment-distance');
+              label.setAttribute('transform', `translate(${point.x + radius * meters} ${point.y}) scale(${1 / zoom})`);
+              label.setAttribute('x', '4');
+              label.textContent = `${radius}m`;
+              rings.push(label);
+            }
+          }
+        }
+        catchmentRings.replaceChildren(...rings);
+      }
+
+      function renderDemandInfo() {
+        calculateDemand();
+        const count = positions.filter(position => position.mode === 'kariya').length;
+        if (populationState === 'ready') {
+          demandOverview.textContent = count
+            ? `設置駅${count}駅・潜在利用人口 ${Math.round(totalWeightedDemand).toLocaleString('ja-JP')}人`
+            : '駅を配置すると徒歩800mの集客圏を計算します';
+        } else {
+          demandOverview.textContent = populationState === 'error'
+            ? '人口データを取得できません。通信状態をご確認ください'
+            : '徒歩集客圏：人口データを読み込み中…';
+        }
+        const position = selectedStation();
+        stationDemand.hidden = !position || mapMode !== 'kariya';
+        if (!position || mapMode !== 'kariya') return;
+        if (populationState !== 'ready') {
+          stationDemand.textContent = populationState === 'error' ? '人口データを読み込めません' : '集客人口を計算中…';
+          return;
+        }
+        const stats = demandByStation.get(position.id) || { covered: 0, weighted: 0 };
+        stationDemand.textContent = `徒歩800m圏の担当人口：${Math.round(stats.covered).toLocaleString('ja-JP')}人 ／ 距離補正後の潜在利用人口：${Math.round(stats.weighted).toLocaleString('ja-JP')}人`;
+      }
+
+      function loadPopulationData() {
+        if (typeof fetch !== 'function') return;
+        fetch('./population-kariya-2025.json').then(response => {
+          if (!response.ok) throw new Error(`人口データ HTTP ${response.status}`);
+          return response.json();
+        }).then(data => {
+          if (!Array.isArray(data.cells) || data.populationYear !== 2025) throw new Error('人口データ形式が不正');
+          populationSamples = preparePopulationSamples(data.cells);
+          populationState = 'ready';
+          demandRevision++;
+          renderDemandInfo();
+        }).catch(() => {
+          populationState = 'error';
+          renderDemandInfo();
+        });
+      }
 
       function mercator(lon, lat, zoom) {
         const size = 256 * 2 ** zoom;
@@ -617,6 +782,7 @@
           const next = canvasToGeo(start.x + dx, start.y + dy);
           position.lon = next.lon;
           position.lat = next.lat;
+          demandRevision++;
         } else {
           const margin = halfTrackWidth(position.carCount);
           const x = stationDragStart.original.xRatio * canvasSize.width + dx;
@@ -723,6 +889,7 @@
           ? { id: nextStationId++, rotation: 0, mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
           : { id: nextStationId++, rotation: 0, mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
         positions.push(position);
+        if (mapMode === 'kariya') demandRevision++;
         selectStation(position.id);
         hint.textContent = `1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
@@ -741,6 +908,8 @@
             position.carCount, false, MAP_CENTER.lat, position.rotation, position.id
           );
         }));
+        renderCatchmentRings();
+        renderDemandInfo();
       }
 
       function fitCanvas() {
@@ -936,6 +1105,7 @@
 
       window.addEventListener('resize', fitCanvas);
       fitCanvas();
+      loadPopulationData();
     })();
   </script>
 </body>
