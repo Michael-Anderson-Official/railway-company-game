@@ -43,7 +43,7 @@ const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#placed', '#preview',
   '#place-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
-  '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand'
+  '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand'
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';
@@ -76,6 +76,11 @@ async function run() {
   assert.match(nodes['#demand-overview'].textContent, /駅を配置すると/);
   nodes['#place-tool'].dispatch('click');
   clickCanvas(200, 300); // MAP_CENTER in the center of the initial map.
+  assert.equal(nodes['#station-name'].value, '新駅1');
+  nodes['#station-name'].value = '刈谷中央';
+  nodes['#station-name'].dispatch('input');
+  assert.equal(nodes['#placed'].children[0].children[2].textContent, '刈谷中央');
+  assert.match(nodes['#placed'].children[0].attributes['aria-label'], /刈谷中央/);
   assert.match(nodes['#station-demand'].textContent, /担当人口：600人/);
   assert.match(nodes['#station-demand'].textContent, /潜在利用人口：320人/);
   assert.match(nodes['#demand-overview'].textContent, /潜在利用人口 320人/);
@@ -89,6 +94,11 @@ async function run() {
   // Place a second station 500m to the east. Each cell population is assigned
   // to its nearest station exactly once; the combined reach can grow to 1,000.
   clickCanvas(200 + 500 * mapUnitsPerMeter * 400 / 480, 300);
+  assert.equal(nodes['#station-name'].value, '新駅2');
+  nodes['#station-name'].value = '新町';
+  nodes['#station-name'].dispatch('input');
+  assert.equal(nodes['#placed'].children[0].children[2].textContent, '刈谷中央', 'other stations retain their names');
+  assert.equal(nodes['#placed'].children[1].children[2].textContent, '新町');
   assert.match(nodes['#demand-overview'].textContent, /設置駅2駅/);
   assert.match(nodes['#demand-overview'].textContent, /潜在利用人口 1,000人/);
   assert.match(nodes['#station-demand'].textContent, /担当人口：900人/);
@@ -109,7 +119,12 @@ async function run() {
   nodes['#map-mode'].dispatch('change');
   assert.equal(nodes['#catchment-rings'].children.length, 0);
   assert.equal(nodes['#station-demand'].hidden, true);
-  console.log('2025 population mesh, 400/600/800m weights, no double-counting, drag update and blank mode OK');
+  clickCanvas(200, 300);
+  assert.equal(nodes['#station-name'].value, '新駅3');
+  nodes['#station-name'].value = 'テスト新駅';
+  nodes['#station-name'].dispatch('input');
+  assert.equal(nodes['#placed'].children[0].children[2].textContent, 'テスト新駅', 'names work in blank mode');
+  console.log('Station naming in both modes, 2025 population mesh, 400/600/800m weights, no double-counting and drag update OK');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

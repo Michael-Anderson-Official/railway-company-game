@@ -62,6 +62,7 @@
     .platform { fill: #e8edf1; stroke: #778594; }
     .platform-inset { fill: none; stroke: #b6c0ca; }
     .platform-label { fill: #64758a; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+    .station-name-label { fill: #183f79; font-size: 15px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
     .map-marker { stroke: #fff; stroke-width: 2.5; }
     .map-marker.jr { fill: #d47922; }
     .map-marker.meitetsu { fill: #ca3852; }
@@ -118,6 +119,10 @@
       border: 0; background: transparent; color: #65758a; font-size: 24px;
       width: 32px; height: 32px; cursor: pointer;
     }
+    .editor-name { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+    .editor-name label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
+    .editor-name input { flex: 1; min-width: 0; min-height: 38px; padding: 7px 10px; border: 1px solid #cbd8eb; border-radius: 8px; background: #fff; color: #203047; font: inherit; font-size: 16px; }
+    .editor-name input:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .editor-rotation { display: flex; align-items: center; gap: 8px; }
     .editor-rotation label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
@@ -234,6 +239,10 @@
           <div><strong id="selected-station-info">1面2線</strong><span>駅本体をドラッグで移動・紫の↻で自由回転</span></div>
           <button id="deselect-station" type="button" aria-label="駅の選択を解除">×</button>
         </div>
+        <div class="editor-name">
+          <label for="station-name">駅名</label>
+          <input id="station-name" type="text" maxlength="24" autocomplete="off" placeholder="例：刈谷中央" aria-label="駅名">
+        </div>
         <div class="editor-rotation">
           <label for="station-angle">角度</label>
           <input id="station-angle" type="range" min="0" max="359.9" step="0.1" value="0" aria-label="駅の回転角度">
@@ -263,6 +272,7 @@
       const mapCredit = document.querySelector('#map-credit');
       const stationEditor = document.querySelector('#station-editor');
       const stationInfo = document.querySelector('#selected-station-info');
+      const stationNameInput = document.querySelector('#station-name');
       const stationAngle = document.querySelector('#station-angle');
       const stationAngleValue = document.querySelector('#station-angle-value');
       const stationDemand = document.querySelector('#station-demand');
@@ -580,10 +590,10 @@
         return platformWidth(carCount) / 2 + 40;
       }
 
-      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = 0, stationId = null) {
+      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = 0, stationId = null, name = '') {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
-        group.setAttribute('aria-label', `1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
+        group.setAttribute('aria-label', `${name ? `${name}／` : ''}1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
         if (stationId !== null) {
           group.setAttribute('data-station-id', String(stationId));
           group.setAttribute('class', `station-item${stationId === selectedStationId ? ' selected' : ''}`);
@@ -647,6 +657,15 @@
         }
         group.append(diagram);
         group.append(label);
+        if (stationId !== null) {
+          const stationNameLabel = document.createElementNS(SVG_NS, 'text');
+          stationNameLabel.setAttribute('class', 'station-name-label');
+          stationNameLabel.setAttribute('transform', city
+            ? `translate(0 ${-38 / (canvasSize.width / view.width)}) scale(${view.width / canvasSize.width})`
+            : 'translate(0 -56)');
+          stationNameLabel.textContent = name;
+          group.append(stationNameLabel);
+        }
         if (stationId !== null && stationId === selectedStationId) {
           const zoom = canvasSize.width / view.width;
           const radians = rotation * Math.PI / 180;
@@ -693,6 +712,7 @@
         stationEditor.hidden = !position;
         if (!position) return;
         stationInfo.textContent = `1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）`;
+        stationNameInput.value = position.name;
         stationAngle.value = String(position.rotation);
         stationAngleValue.textContent = `${position.rotation.toFixed(1)}°`;
       }
@@ -701,6 +721,13 @@
         selectedStationId = id;
         redrawPlaced();
         updateStationEditor();
+      }
+
+      function updateStationName() {
+        const position = selectedStation();
+        if (!position) return;
+        position.name = stationNameInput.value.trim() || `新駅${position.id}`;
+        redrawPlaced();
       }
 
       function stationFromEvent(event) {
@@ -888,6 +915,7 @@
         const position = mapMode === 'kariya'
           ? { id: nextStationId++, rotation: 0, mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
           : { id: nextStationId++, rotation: 0, mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
+        position.name = `新駅${position.id}`;
         positions.push(position);
         if (mapMode === 'kariya') demandRevision++;
         selectStation(position.id);
@@ -899,13 +927,13 @@
         placed.replaceChildren(...positions.filter(position => position.mode === mapMode).map(position => {
           if (mapMode === 'kariya') {
             const point = geoToCanvas(position.lon, position.lat);
-            return createStation(point.x, point.y, position.carCount, true, position.lat, position.rotation, position.id);
+            return createStation(point.x, point.y, position.carCount, true, position.lat, position.rotation, position.id, position.name);
           }
           const margin = halfTrackWidth(position.carCount);
           return createStation(
             Math.max(margin, Math.min(canvasSize.width - margin, position.xRatio * canvasSize.width)),
             Math.max(47, Math.min(canvasSize.height - 47, position.yRatio * canvasSize.height)),
-            position.carCount, false, MAP_CENTER.lat, position.rotation, position.id
+            position.carCount, false, MAP_CENTER.lat, position.rotation, position.id, position.name
           );
         }));
         renderCatchmentRings();
@@ -970,6 +998,14 @@
       });
 
       stationAngle.addEventListener('input', () => setRotation(Number(stationAngle.value)));
+      stationNameInput.addEventListener('input', event => {
+        if (!event.isComposing) updateStationName();
+      });
+      stationNameInput.addEventListener('compositionend', updateStationName);
+      stationNameInput.addEventListener('change', () => {
+        updateStationName();
+        stationNameInput.value = selectedStation()?.name || '';
+      });
       document.querySelector('#deselect-station').addEventListener('click', () => {
         selectStation(null);
         hint.textContent = '「1面2線」を選んで配置できます';
