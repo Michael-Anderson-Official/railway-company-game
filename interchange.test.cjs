@@ -38,7 +38,7 @@ class Element {
 
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed',
-  '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level',
+  '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level',
   '#car-count', '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#deselect-station',
   '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand', '#track-editor', '#track-origin',
@@ -47,6 +47,7 @@ const nodes = Object.fromEntries([
   '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'
 ].map(key => [key, new Element()]));
 nodes['#map-mode'].value = 'kariya';
+nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 nodes['#interchange-dialog'].hidden = true;
@@ -57,7 +58,8 @@ const code = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const fetched = [];
 const population = {
   './population-kariya-2025.json': [[137.012, 35.004, 100, 0, 0]],
-  './population-chiryu-2025.json': [[137.03972, 35.00611, 500, 0, 0]]
+  './population-chiryu-2025.json': [[137.03972, 35.00611, 500, 0, 0]],
+  './population-toyoake-2025.json': [[136.995665, 35.05227, 350, 0, 0]]
 };
 vm.runInNewContext(code, {
   document: { querySelector: key => nodes[key], createElement: () => new Element(), createElementNS: () => new Element() },
@@ -78,8 +80,9 @@ function mercator(lon, lat) {
 function geoToScreen(lon, lat) {
   const origin = mercator(137.012, 35.004);
   const location = mercator(lon, lat);
-  return { x: (240 + (location.x - origin.x) * .9) * 400 / 480,
-    y: (360 + (location.y - origin.y) * .9) * 600 / 720 };
+  const [viewX, viewY, viewWidth, viewHeight] = board.attributes.viewBox.split(' ').map(Number);
+  return { x: (240 + (location.x - origin.x) * .9 - viewX) * 400 / viewWidth,
+    y: (360 + (location.y - origin.y) * .9 - viewY) * 600 / viewHeight };
 }
 function mouse(type, x, y, target = board) {
   board.dispatch(type, { pointerType: 'mouse', pointerId: 7, button: 0, clientX: x, clientY: y, target });
@@ -93,9 +96,10 @@ function placeAt(lon, lat) {
 
 async function run() {
   await new Promise(resolve => setImmediate(resolve));
-  assert.deepEqual(fetched, ['./population-kariya-2025.json', './population-chiryu-2025.json']);
-  assert.ok(html.includes('知立市72,861人'), 'official Chiryū population is shown');
+  assert.deepEqual(fetched, ['./population-kariya-2025.json', './population-chiryu-2025.json', './population-toyoake-2025.json']);
+  assert.ok(html.includes('知立72,861'), 'official Chiryū population is shown');
   assert.ok(html.includes('137.054972'), 'the relocated 2024 Mikawa Chiryū station is represented');
+  assert.ok(html.includes('豊明67,693人'), 'official Toyoake population is shown');
   nodes['#place-tool'].dispatch('click');
   placeAt(137.012, 35.004);
   assert.equal(nodes['#interchange-dialog'].hidden, true, 'no transfer prompt away from rail stations');
@@ -126,7 +130,19 @@ async function run() {
   nodes['#interchange-cancel'].dispatch('click');
   assert.equal(nodes['#station-interchange'].hidden, true, 'declining leaves a normal station');
   assert.equal(nodes['#interchange-dialog'].hidden, true);
-  console.log('Chiryū + Kariya population, 250m transfer offer, confirm/decline, and move invalidation OK');
+
+  // Recenter the same map on Toyoake; existing placed stations must be retained.
+  nodes['#map-focus'].value = 'toyoake';
+  nodes['#map-focus'].dispatch('change');
+  assert.ok(Number(board.attributes.viewBox.split(' ')[1]) < 0, 'map pans north toward Toyoake');
+  assert.equal(nodes['#placed'].children.length, 3, 'existing stations survive switching city focus');
+  placeAt(136.995665, 35.05227);
+  assert.match(nodes['#interchange-question'].textContent, /前後駅/);
+  assert.match(nodes['#station-demand'].textContent, /潜在利用人口：350人/, 'Toyoake population mesh contributes to catchment');
+  nodes['#interchange-confirm'].dispatch('click');
+  assert.match(nodes['#station-interchange'].textContent, /名鉄 前後駅/);
+  assert.equal(nodes['#interchange-dialog'].hidden, true);
+  console.log('Three-city population, city focus, 250m transfer offer, confirm/decline, and move invalidation OK');
 }
 
 run().catch(error => { console.error(error); process.exitCode = 1; });

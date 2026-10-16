@@ -41,6 +41,7 @@
     .tool button:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .tool svg { width: 42px; height: 25px; }
     .length-control { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .length-control[hidden] { display: none; }
     .length-control label { font-size: 12px; font-weight: 700; color: #516176; }
     .length-control select {
       min-height: 38px; padding: 7px 9px; border: 1px solid #d5dee7; border-radius: 8px;
@@ -195,7 +196,7 @@
     <header class="header">
       <div>
         <h1>鉄道会社経営ゲーム</h1>
-        <p class="subtitle">刈谷市地下鉄構想 · 配線エディタ</p>
+        <p class="subtitle">刈谷・知立・豊明 地下鉄構想 · 配線エディタ</p>
       </div>
       <div class="tool" role="toolbar" aria-label="配置する設備">
         <button id="place-tool" type="button" aria-pressed="false">
@@ -214,8 +215,16 @@
         <div class="length-control">
           <label for="map-mode">地図</label>
           <select id="map-mode" aria-label="編集する地図">
-            <option value="kariya" selected>刈谷市</option>
+            <option value="kariya" selected>3市の地図</option>
             <option value="blank">白紙</option>
+          </select>
+        </div>
+        <div class="length-control" id="map-focus-control">
+          <label for="map-focus">表示地域</label>
+          <select id="map-focus" aria-label="地図の表示地域">
+            <option value="kariya" selected>刈谷市</option>
+            <option value="chiryu">知立市</option>
+            <option value="toyoake">豊明市</option>
           </select>
         </div>
         <div class="length-control">
@@ -265,12 +274,13 @@
       </svg>
       <div class="map-data" id="map-data">
         <details>
-          <summary>刈谷市153,200人・知立市72,861人</summary>
+          <summary>刈谷153,200・知立72,861・豊明67,693人</summary>
           <div class="map-data-body">
             <p><strong>人口：</strong>153,200人／71,228世帯（2026年10月1日・住民基本台帳）</p>
             <p><strong>知立市人口：</strong>72,861人／34,917世帯（2026年10月1日・住民基本台帳）</p>
+            <p><strong>豊明市人口：</strong>67,693人／31,838世帯（2026年10月1日・市公式公表）</p>
             <p><strong>商業：</strong>卸売・小売業960事業所、うち小売698事業所（2021年経済センサス）</p>
-            <p><strong>既存鉄道：</strong>JR東海道本線、名鉄名古屋本線・三河線の3路線。刈谷市8駅＋知立市4駅を表示。</p>
+            <p><strong>既存鉄道：</strong>JR東海道本線、名鉄名古屋本線・三河線の3路線。刈谷市8駅＋知立市4駅＋豊明市2駅を表示（豊明市は名鉄豊明・前後）。</p>
             <p><strong>2024年度：</strong>JR刈谷駅乗車1,058.6万人／名鉄刈谷駅乗降866.9万人。計数方法が異なるため単純比較不可。</p>
             <p>既存駅はJR＝橙・名鉄＝赤・乗換＝紫、主要商業拠点＝緑、工業拠点＝青で表示します。新設駅の中心から既存駅250m以内なら他社線との乗換設定を確認します。承認した駅だけ「乗換」表示になります（駅間の直線距離を使ったゲーム上の仮判定）。</p>
             <p><strong>駅別利用者数（2024年度、千人）</strong></p>
@@ -290,9 +300,9 @@
             </table>
             <p><strong>掲載商業拠点：</strong>みなくる刈谷／アピタ刈谷店／ルビットタウン刈谷／イオンタウン刈谷／刈谷ハイウェイオアシス</p>
             <p><strong>掲載工業拠点：</strong>デンソー本社／豊田自動織機 本社・刈谷工場／デンソー高棚製作所</p>
-            <p>全店舗・全事業所を表示したものではありません。刈谷市・知立市両市の駅の集客人口には国土交通省の250m人口メッシュ（2020年国勢調査ベース、2025年推計）を使用。2026年の住民基本台帳人口とは集計基準が異なります。</p>
+            <p>全店舗・全事業所を表示したものではありません。刈谷市・知立市・豊明市の駅の集客人口には国土交通省の250m人口メッシュ（2020年国勢調査ベース、2025年推計）を使用。2026年の市公表人口とは集計基準が異なります。</p>
             <p><strong>徒歩集客ルール：</strong>駅から0〜400mは係数100%、400〜600mは65%、600〜800mは30%。800m超は対象外。250mメッシュを細分化して計算し、重なる場合は最寄りの設置駅に一度だけ配分します。数値は実際の乗車人数ではなく、距離で補正した潜在利用者人口です。</p>
-            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">刈谷市人口</a> · <a href="https://www.city.chiryu.aichi.jp/shisei/tokei/1/toukeir8/20290.html" target="_blank" rel="noopener noreferrer">知立市人口</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（刈谷市）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計</a> · <a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-mesh250r6.html" target="_blank" rel="noopener noreferrer">250m人口メッシュ（国交省）</a></p>
+            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">刈谷市人口</a> · <a href="https://www.city.chiryu.aichi.jp/shisei/tokei/1/toukeir8/20290.html" target="_blank" rel="noopener noreferrer">知立市人口</a> · <a href="https://www.city.toyoake.lg.jp/item/3749.htm" target="_blank" rel="noopener noreferrer">豊明市人口</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（刈谷市）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計</a> · <a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-mesh250r6.html" target="_blank" rel="noopener noreferrer">250m人口メッシュ（国交省）</a></p>
           </div>
         </details>
         <div id="demand-overview" class="demand-overview" role="status" aria-live="polite">徒歩集客圏：人口データを読み込み中…</div>
@@ -371,6 +381,8 @@
       const button = document.querySelector('#place-tool');
       const trackButton = document.querySelector('#track-tool');
       const modeSelect = document.querySelector('#map-mode');
+      const mapFocusControl = document.querySelector('#map-focus-control');
+      const mapFocusSelect = document.querySelector('#map-focus');
       const floorSelect = document.querySelector('#floor-level');
       const lengthSelect = document.querySelector('#car-count');
       const hint = document.querySelector('#hint');
@@ -424,6 +436,11 @@
       const WALK_CATCHMENT_SQUARED = WALK_CATCHMENT_METERS ** 2;
       const POPULATION_SAMPLES_PER_SIDE = 4;
       const MAP_CENTER = { lat: 35.004, lon: 137.012 };
+      const MAP_FOCUSES = {
+        kariya: MAP_CENTER,
+        chiryu: { lat: 35.005, lon: 137.043 },
+        toyoake: { lat: 35.047, lon: 137.003 }
+      };
       // 刈谷市近傍の距離判定用。地域全体で緯度差が小さいので局所正距近似とする。
       const METERS_PER_DEGREE = EARTH_RADIUS_METERS * Math.PI / 180;
       const METERS_PER_DEGREE_LON = METERS_PER_DEGREE * Math.cos(MAP_CENTER.lat * Math.PI / 180);
@@ -441,7 +458,10 @@
         { name: '知立', lat: 35.00611, lon: 137.03972, kind: 'interchange', operator: '名鉄', lines: '名古屋本線・三河線' },
         { name: '三河知立', lat: 35.005722, lon: 137.054972, kind: 'meitetsu', operator: '名鉄', lines: '三河線' },
         { name: '牛田', lat: 34.999252, lon: 137.060857, kind: 'meitetsu', operator: '名鉄', lines: '名古屋本線' },
-        { name: '重原', lat: 34.995, lon: 137.024111, kind: 'meitetsu', operator: '名鉄', lines: '三河線' }
+        { name: '重原', lat: 34.995, lon: 137.024111, kind: 'meitetsu', operator: '名鉄', lines: '三河線' },
+        // 豊明市内の2駅（名鉄名古屋本線）。
+        { name: '豊明', lat: 35.041127, lon: 137.008161, kind: 'meitetsu', operator: '名鉄', lines: '名古屋本線' },
+        { name: '前後', lat: 35.05227, lon: 136.995665, kind: 'meitetsu', operator: '名鉄', lines: '名古屋本線' }
       ];
       // 商業の代表施設（全店ではない）。施設位置は公開地図と各施設の案内に基づく。
       const commerceSites = [
@@ -605,7 +625,7 @@
 
       function loadPopulationData() {
         if (typeof fetch !== 'function') return;
-        Promise.all(['./population-kariya-2025.json', './population-chiryu-2025.json'].map(url =>
+        Promise.all(['./population-kariya-2025.json', './population-chiryu-2025.json', './population-toyoake-2025.json'].map(url =>
           fetch(url).then(response => {
             if (!response.ok) throw new Error(`人口データ HTTP ${response.status}`);
             return response.json();
@@ -1686,13 +1706,17 @@
         canvasSize = { width, height };
         mapData.hidden = mapMode !== 'kariya';
         mapCredit.hidden = mapMode !== 'kariya';
-        svg.setAttribute('aria-label', mapMode === 'kariya' ? '刈谷市の地下鉄計画地図' : '配線図を作成する白紙のキャンバス');
+        mapFocusControl.hidden = mapMode !== 'kariya';
+        svg.setAttribute('aria-label', mapMode === 'kariya' ? '刈谷市・知立市・豊明市の地下鉄計画地図' : '配線図を作成する白紙のキャンバス');
         if (mapMode !== 'kariya') {
           mapTiles.replaceChildren();
           mapMarkers.replaceChildren();
         }
         renderedTiles = '';
-        applyView({ x: 0, y: 0, width });
+        const focus = geoToCanvas(...(mapMode === 'kariya'
+          ? [MAP_FOCUSES[mapFocusSelect.value].lon, MAP_FOCUSES[mapFocusSelect.value].lat]
+          : [MAP_CENTER.lon, MAP_CENTER.lat]));
+        applyView({ x: focus.x - width / 2, y: focus.y - height / 2, width });
         pinchStart = null;
         syncTrackOrigins();
         panStart = null;
@@ -1823,7 +1847,26 @@
         pendingTouchPlacement = null;
         fitCanvas();
         updateStationEditor();
-        hint.textContent = `${floorLabel()}：${mapMode === 'kariya' ? '刈谷市の地図' : '白紙のキャンバス'}にホームを配置できます`;
+        hint.textContent = `${floorLabel()}：${mapMode === 'kariya' ? '3市の地図' : '白紙のキャンバス'}にホームを配置できます`;
+      });
+
+      mapFocusSelect.addEventListener('change', () => {
+        if (mapMode !== 'kariya') return;
+        const location = MAP_FOCUSES[mapFocusSelect.value];
+        if (!location) return;
+        const point = geoToCanvas(location.lon, location.lat);
+        selectedStationId = null;
+        trackDestination = null;
+        trackTargetStation = null;
+        stationDragStart = null;
+        rotationDragStart = null;
+        connectionDialog.hidden = true;
+        hideInterchangeDialog();
+        preview.setAttribute('visibility', 'hidden');
+        applyView({ x: point.x - view.width / 2, y: point.y - view.height / 2, width: view.width });
+        syncTrackOrigins();
+        updateStationEditor();
+        hint.textContent = `${mapFocusSelect.selectedOptions?.[0]?.textContent || mapFocusSelect.value}へ移動しました。駅・線路の配置データはそのまま維持されます`;
       });
 
       floorSelect.addEventListener('change', () => {

@@ -43,7 +43,7 @@ class Element {
 
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
-  '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count',
+  '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
@@ -54,6 +54,7 @@ const ids = [
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
 nodes['#map-mode'].value = 'kariya';
+nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 const board = nodes['#board'];

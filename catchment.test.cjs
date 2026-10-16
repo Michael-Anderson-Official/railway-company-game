@@ -41,7 +41,7 @@ class Element {
 
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#station-endpoints', '#preview',
-  '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
+  '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#station-interchange', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
   '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
@@ -50,6 +50,7 @@ const nodes = Object.fromEntries([
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';
+nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 const samples = [
