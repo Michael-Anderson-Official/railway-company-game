@@ -43,7 +43,8 @@ const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#preview',
   '#place-tool', '#track-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
-  '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand'
+  '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
+  '#track-editor', '#track-origin', '#track-length', '#track-angle', '#build-track', '#track-validation'
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';
@@ -58,7 +59,7 @@ const window = new Element();
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const source = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 vm.runInNewContext(source, {
-  document: { querySelector: key => nodes[key], createElementNS: () => new Element() },
+  document: { querySelector: key => nodes[key], createElement: () => new Element(), createElementNS: () => new Element() },
   window, Math, Map,
   fetch: async () => ({ ok: true, json: async () => ({ populationYear: 2025, cells: samples }) })
 });
