@@ -40,8 +40,8 @@ class Element {
 }
 
 const nodes = Object.fromEntries([
-  '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#placed', '#preview',
-  '#place-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
+  '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#preview',
+  '#place-tool', '#track-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand'
 ].map(key => [key, new Element()]));
