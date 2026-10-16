@@ -39,6 +39,13 @@
     }
     .tool button:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .tool svg { width: 42px; height: 25px; }
+    .length-control { display: inline-flex; align-items: center; gap: 7px; white-space: nowrap; }
+    .length-control label { font-size: 12px; font-weight: 700; color: #516176; }
+    .length-control select {
+      min-height: 38px; padding: 7px 9px; border: 1px solid #d5dee7; border-radius: 8px;
+      background: #fff; color: #203047; font: inherit; font-size: 13px;
+    }
+    .length-control select:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .tool-hint { white-space: nowrap; font-size: 11px; color: #798493; }
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
     #board { display: block; width: 100%; height: 100%; touch-action: none; }
@@ -46,6 +53,7 @@
     .track { fill: none; stroke: #303e4d; stroke-width: 5; stroke-linecap: round; }
     .platform { fill: #e8edf1; stroke: #778594; stroke-width: 2; }
     .platform-inset { fill: none; stroke: #b6c0ca; stroke-width: 1; }
+    .platform-label { fill: #64758a; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
     .preview { opacity: .42; pointer-events: none; }
     .hint {
       position: absolute; bottom: 20px; left: 24px; pointer-events: none;
@@ -54,8 +62,8 @@
     }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
-      .tool { width: 100%; }
-      .tool-hint { white-space: normal; }
+      .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
+      .tool-hint { flex-basis: 100%; white-space: normal; }
       .hint { bottom: 14px; left: 14px; font-size: 11px; }
     }
   </style>
@@ -75,6 +83,26 @@
           </svg>
           1面2線
         </button>
+        <div class="length-control">
+          <label for="car-count">ホーム長</label>
+          <select id="car-count" aria-label="ホームの対応両数">
+            <option value="2">2両</option>
+            <option value="3">3両</option>
+            <option value="4">4両</option>
+            <option value="5">5両</option>
+            <option value="6">6両</option>
+            <option value="7">7両</option>
+            <option value="8">8両</option>
+            <option value="9">9両</option>
+            <option value="10" selected>10両</option>
+            <option value="11">11両</option>
+            <option value="12">12両</option>
+            <option value="13">13両</option>
+            <option value="14">14両</option>
+            <option value="15">15両</option>
+            <option value="16">16両</option>
+          </select>
+        </div>
         <span class="tool-hint">選択後タップで配置・2本指で拡大縮小</span>
       </div>
     </header>
@@ -94,6 +122,7 @@
       const placed = document.querySelector('#placed');
       const preview = document.querySelector('#preview');
       const button = document.querySelector('#place-tool');
+      const lengthSelect = document.querySelector('#car-count');
       const hint = document.querySelector('#hint');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
@@ -101,38 +130,56 @@
       const MAX_ZOOM = 4;
       const TAP_SLOP = 14;
       let placing = false;
+      let selectedCars = Number(lengthSelect.value);
       let canvasSize = { width: 1440, height: 820 };
       let view = { x: 0, y: 0, width: 1440, height: 820 };
       let pendingTouchPlacement = null;
       let pinchStart = null;
 
       // 島式ホーム1面を2本の線路で挟む、独立した配線ユニット。
-      function createStation(x, y) {
+      function platformWidth(carCount) {
+        return 22 * carCount + 28;
+      }
+
+      function halfTrackWidth(carCount) {
+        return platformWidth(carCount) / 2 + 40;
+      }
+
+      function createStation(x, y, carCount) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
+        group.setAttribute('aria-label', `1面2線 ${carCount}両対応`);
+        const width = platformWidth(carCount);
+        const trackEnd = halfTrackWidth(carCount);
         const tracks = [-47, 47];
         for (const offset of tracks) {
           const line = document.createElementNS(SVG_NS, 'path');
           line.setAttribute('class', 'track');
-          line.setAttribute('d', `M -195 ${offset} H 195`);
+          line.setAttribute('d', `M ${-trackEnd} ${offset} H ${trackEnd}`);
           group.append(line);
         }
         const platform = document.createElementNS(SVG_NS, 'rect');
         platform.setAttribute('class', 'platform');
-        platform.setAttribute('x', '-135');
+        platform.setAttribute('x', String(-width / 2));
         platform.setAttribute('y', '-29');
-        platform.setAttribute('width', '270');
+        platform.setAttribute('width', String(width));
         platform.setAttribute('height', '58');
         platform.setAttribute('rx', '6');
         group.append(platform);
         const inset = document.createElementNS(SVG_NS, 'rect');
         inset.setAttribute('class', 'platform-inset');
-        inset.setAttribute('x', '-127');
+        inset.setAttribute('x', String(-width / 2 + 8));
         inset.setAttribute('y', '-21');
-        inset.setAttribute('width', '254');
+        inset.setAttribute('width', String(width - 16));
         inset.setAttribute('height', '42');
         inset.setAttribute('rx', '3');
         group.append(inset);
+        const label = document.createElementNS(SVG_NS, 'text');
+        label.setAttribute('class', 'platform-label');
+        label.setAttribute('x', '0');
+        label.setAttribute('y', '0');
+        label.textContent = `${carCount}両`;
+        group.append(label);
         return group;
       }
 
@@ -143,8 +190,9 @@
         point.x = event.clientX;
         point.y = event.clientY;
         const local = point.matrixTransform(matrix.inverse());
+        const trackEnd = halfTrackWidth(selectedCars);
         return {
-          x: Math.max(195, Math.min(canvasSize.width - 195, local.x)),
+          x: Math.max(trackEnd, Math.min(canvasSize.width - trackEnd, local.x)),
           y: Math.max(47, Math.min(canvasSize.height - 47, local.y))
         };
       }
@@ -196,9 +244,9 @@
         if (!placing) return;
         const point = pointerOnCanvas(event);
         if (!point) return;
-        positions.push({ xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height });
-        placed.append(createStation(point.x, point.y));
-        hint.textContent = `1面2線：${positions.length}か所配置済み`;
+        positions.push({ xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars });
+        placed.append(createStation(point.x, point.y, selectedCars));
+        hint.textContent = `1面2線（${selectedCars}両）：${positions.length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
       }
 
@@ -211,9 +259,9 @@
         canvasSize = { width, height };
         applyView({ x: 0, y: 0, width });
         pinchStart = null;
-        placed.replaceChildren(...positions.map(({ xRatio, yRatio }) => createStation(
-          Math.max(195, Math.min(width - 195, xRatio * width)),
-          Math.max(47, Math.min(height - 47, yRatio * height))
+        placed.replaceChildren(...positions.map(({ xRatio, yRatio, carCount }) => createStation(
+          Math.max(halfTrackWidth(carCount), Math.min(width - halfTrackWidth(carCount), xRatio * width)),
+          Math.max(47, Math.min(height - 47, yRatio * height)), carCount
         )));
         preview.setAttribute('visibility', 'hidden');
       }
@@ -222,7 +270,7 @@
         if (!placing || touches.size || event.pointerType === 'touch') return;
         const point = pointerOnCanvas(event);
         if (!point) return;
-        preview.replaceChildren(createStation(point.x, point.y));
+        preview.replaceChildren(createStation(point.x, point.y, selectedCars));
         preview.setAttribute('visibility', 'visible');
       }
 
@@ -231,7 +279,13 @@
         button.setAttribute('aria-pressed', String(placing));
         svg.classList.toggle('placing', placing);
         preview.setAttribute('visibility', 'hidden');
-        hint.textContent = placing ? '白紙の好きな場所をクリックして配置' : '「1面2線」を選んで配置できます';
+        hint.textContent = placing ? `${selectedCars}両対応のホームを好きな場所に配置` : '「1面2線」を選んで配置できます';
+      });
+
+      lengthSelect.addEventListener('change', () => {
+        selectedCars = Number(lengthSelect.value);
+        preview.setAttribute('visibility', 'hidden');
+        hint.textContent = placing ? `${selectedCars}両対応のホームを好きな場所に配置` : `${selectedCars}両対応のホームを選択中`;
       });
 
       svg.addEventListener('pointermove', event => {
