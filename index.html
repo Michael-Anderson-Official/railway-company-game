@@ -52,9 +52,9 @@
     #board.placing { cursor: crosshair; }
     .map-tiles, .map-markers { pointer-events: none; }
     .map-tiles { opacity: .93; }
-    .track { fill: none; stroke: #303e4d; stroke-width: 5; stroke-linecap: round; }
-    .platform { fill: #e8edf1; stroke: #778594; stroke-width: 2; }
-    .platform-inset { fill: none; stroke: #b6c0ca; stroke-width: 1; }
+    .track { fill: none; stroke: #303e4d; stroke-linecap: round; }
+    .platform { fill: #e8edf1; stroke: #778594; }
+    .platform-inset { fill: none; stroke: #b6c0ca; }
     .platform-label { fill: #64758a; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
     .map-marker { stroke: #fff; stroke-width: 2.5; }
     .map-marker.jr { fill: #d47922; }
@@ -123,21 +123,21 @@
         <div class="length-control">
           <label for="car-count">ホーム長</label>
           <select id="car-count" aria-label="ホームの対応両数">
-            <option value="2">2両</option>
-            <option value="3">3両</option>
-            <option value="4">4両</option>
-            <option value="5">5両</option>
-            <option value="6">6両</option>
-            <option value="7">7両</option>
-            <option value="8">8両</option>
-            <option value="9">9両</option>
-            <option value="10" selected>10両</option>
-            <option value="11">11両</option>
-            <option value="12">12両</option>
-            <option value="13">13両</option>
-            <option value="14">14両</option>
-            <option value="15">15両</option>
-            <option value="16">16両</option>
+            <option value="2">2両・40m</option>
+            <option value="3">3両・60m</option>
+            <option value="4">4両・80m</option>
+            <option value="5">5両・100m</option>
+            <option value="6">6両・120m</option>
+            <option value="7">7両・140m</option>
+            <option value="8">8両・160m</option>
+            <option value="9">9両・180m</option>
+            <option value="10" selected>10両・200m</option>
+            <option value="11">11両・220m</option>
+            <option value="12">12両・240m</option>
+            <option value="13">13両・260m</option>
+            <option value="14">14両・280m</option>
+            <option value="15">15両・300m</option>
+            <option value="16">16両・320m</option>
           </select>
         </div>
         <span class="tool-hint">選択後タップで配置・2本指で拡大縮小</span>
@@ -211,6 +211,8 @@
       const MIN_ZOOM = 0.1;
       const TAP_SLOP = 14;
       const BASE_MAP_ZOOM = 13;
+      const EARTH_RADIUS_METERS = 6378137; // 地理院タイルのWebメルカトル図法と同じ球体半径
+      const CAR_LENGTH_METERS = 20;
       const MAP_CENTER = { lat: 35.004, lon: 137.012 };
       // 駅座標：OpenStreetMap、年度別乗車・乗降：刈谷の統計（令和7年版、2024年度実績）。
       const railStations = [
@@ -351,46 +353,68 @@
         return 22 * carCount + 28;
       }
 
+      // 緯度に応じたWebメルカトルの地上距離をSVG座標に換算する。
+      // ホームの寸法はviewBoxのズームと同じ倍率で変わり、背景地図と一致する。
+      function canvasUnitsPerMeter(latitude) {
+        const latitudeRadians = latitude * Math.PI / 180;
+        const mapPixelsPerMeter = (256 * 2 ** BASE_MAP_ZOOM) /
+          (2 * Math.PI * EARTH_RADIUS_METERS * Math.cos(latitudeRadians));
+        return mapPixelsPerMeter * mapScale();
+      }
+
       function halfTrackWidth(carCount) {
         return platformWidth(carCount) / 2 + 40;
       }
 
-      function createStation(x, y, carCount, city = false) {
+      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
-        group.setAttribute('aria-label', `1面2線 ${carCount}両対応`);
+        group.setAttribute('aria-label', `1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
         const diagram = document.createElementNS(SVG_NS, 'g');
-        if (city) diagram.setAttribute('transform', `scale(${.06 * canvasSize.width / 480})`);
-        const width = platformWidth(carCount);
-        const trackEnd = halfTrackWidth(carCount);
-        const tracks = [-47, 47];
+        const meters = city ? canvasUnitsPerMeter(latitude) : 1;
+        const width = city ? carCount * CAR_LENGTH_METERS * meters : platformWidth(carCount);
+        const platformHeight = city ? 8 * meters : 58;
+        const trackEnd = city ? width / 2 + 20 * meters : halfTrackWidth(carCount);
+        const trackOffset = city ? 6 * meters : 47;
+        const insetX = city ? 2 * meters : 8;
+        const insetY = city ? 1.5 * meters : 8;
+        const tracks = [-trackOffset, trackOffset];
         for (const offset of tracks) {
           const line = document.createElementNS(SVG_NS, 'path');
           line.setAttribute('class', 'track');
+          line.setAttribute('stroke-width', String(city ? meters : 5));
           line.setAttribute('d', `M ${-trackEnd} ${offset} H ${trackEnd}`);
           diagram.append(line);
         }
         const platform = document.createElementNS(SVG_NS, 'rect');
         platform.setAttribute('class', 'platform');
         platform.setAttribute('x', String(-width / 2));
-        platform.setAttribute('y', '-29');
+        platform.setAttribute('y', String(-platformHeight / 2));
         platform.setAttribute('width', String(width));
-        platform.setAttribute('height', '58');
-        platform.setAttribute('rx', '6');
+        platform.setAttribute('height', String(platformHeight));
+        platform.setAttribute('rx', String(city ? meters : 6));
+        platform.setAttribute('stroke-width', String(city ? .4 * meters : 2));
         diagram.append(platform);
         const inset = document.createElementNS(SVG_NS, 'rect');
         inset.setAttribute('class', 'platform-inset');
-        inset.setAttribute('x', String(-width / 2 + 8));
-        inset.setAttribute('y', '-21');
-        inset.setAttribute('width', String(width - 16));
-        inset.setAttribute('height', '42');
-        inset.setAttribute('rx', '3');
+        inset.setAttribute('x', String(-width / 2 + insetX));
+        inset.setAttribute('y', String(-platformHeight / 2 + insetY));
+        inset.setAttribute('width', String(width - 2 * insetX));
+        inset.setAttribute('height', String(platformHeight - 2 * insetY));
+        inset.setAttribute('rx', String(city ? .5 * meters : 3));
+        inset.setAttribute('stroke-width', String(city ? .25 * meters : 1));
         diagram.append(inset);
         const label = document.createElementNS(SVG_NS, 'text');
         label.setAttribute('class', city ? 'map-label' : 'platform-label');
         label.setAttribute('x', '0');
-        label.setAttribute('y', city ? '-10' : '0');
-        label.textContent = `${carCount}両`;
+        label.setAttribute('y', '0');
+        label.textContent = city ? `${carCount}両・${carCount * CAR_LENGTH_METERS}m` : `${carCount}両`;
+        if (city) {
+          const zoom = canvasSize.width / view.width;
+          // 数値ラベルのみ表示サイズを保つ。ホーム本体の寸法は一切変えない。
+          label.setAttribute('text-anchor', 'middle');
+          label.setAttribute('transform', `translate(0 ${-14 / zoom}) scale(${1 / zoom})`);
+        }
         if (!city) diagram.append(label);
         group.append(diagram);
         if (city) group.append(label);
@@ -425,6 +449,7 @@
         svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
         renderMapTiles();
         renderMapMarkers();
+        redrawPlaced();
       }
 
       function zoomAtCenter(factor) {
@@ -477,8 +502,8 @@
           ? { mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
           : { mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
         positions.push(position);
-        placed.append(createStation(point.x, point.y, selectedCars, mapMode === 'kariya'));
-        hint.textContent = `1面2線（${selectedCars}両）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
+        placed.append(createStation(point.x, point.y, selectedCars, mapMode === 'kariya', position.lat));
+        hint.textContent = `1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
       }
 
@@ -486,7 +511,7 @@
         placed.replaceChildren(...positions.filter(position => position.mode === mapMode).map(position => {
           if (mapMode === 'kariya') {
             const point = geoToCanvas(position.lon, position.lat);
-            return createStation(point.x, point.y, position.carCount, true);
+            return createStation(point.x, point.y, position.carCount, true, position.lat);
           }
           const margin = halfTrackWidth(position.carCount);
           return createStation(
@@ -516,7 +541,6 @@
         pinchStart = null;
         panStart = null;
         mousePanStart = null;
-        redrawPlaced();
         preview.setAttribute('visibility', 'hidden');
       }
 
@@ -524,7 +548,8 @@
         if (!placing || touches.size || event.pointerType === 'touch') return;
         const point = pointerOnCanvas(event);
         if (!point) return;
-        preview.replaceChildren(createStation(point.x, point.y, selectedCars, mapMode === 'kariya'));
+        const latitude = mapMode === 'kariya' ? canvasToGeo(point.x, point.y).lat : MAP_CENTER.lat;
+        preview.replaceChildren(createStation(point.x, point.y, selectedCars, mapMode === 'kariya', latitude));
         preview.setAttribute('visibility', 'visible');
       }
 
@@ -533,13 +558,13 @@
         button.setAttribute('aria-pressed', String(placing));
         svg.classList.toggle('placing', placing);
         preview.setAttribute('visibility', 'hidden');
-        hint.textContent = placing ? `${selectedCars}両対応のホームを好きな場所に配置` : '「1面2線」を選んで配置できます';
+        hint.textContent = placing ? `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを好きな場所に配置` : '「1面2線」を選んで配置できます';
       });
 
       lengthSelect.addEventListener('change', () => {
         selectedCars = Number(lengthSelect.value);
         preview.setAttribute('visibility', 'hidden');
-        hint.textContent = placing ? `${selectedCars}両対応のホームを好きな場所に配置` : `${selectedCars}両対応のホームを選択中`;
+        hint.textContent = placing ? `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを好きな場所に配置` : `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを選択中`;
       });
 
       modeSelect.addEventListener('change', () => {
