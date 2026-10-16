@@ -88,11 +88,16 @@ assert.match(routes()[0].children[0].attributes.d, /^M /);
 assert.match(routes()[0].children[1].attributes.d, /^M /);
 assert.equal(nodes['#placed'].children.length, 0, 'track drag must not place a station');
 
-// The 4m track center separation uses the same Kariya map projection as stations.
+// Two rails remain visible at regional scale; detailed zoom restores the true 4m gap.
 const first = routes()[0].children.map(line => line.attributes.d.match(/^M ([\d.eE+-]+) ([\d.eE+-]+)/).slice(1).map(Number));
 const spacing = Math.hypot(first[0][0] - first[1][0], first[0][1] - first[1][1]);
 const expectedMetersToSvg = 256 * 2 ** 13 * .9 / (2 * Math.PI * 6378137 * Math.cos(35.004 * Math.PI / 180));
-assert.ok(Math.abs(spacing - 4 * expectedMetersToSvg) < .001, 'rail spacing is four actual meters');
+assert.ok(Math.abs(spacing - 6) < .001, 'two rails are visibly separated on the overview map');
+for (let i = 0; i < 4; i++) nodes['#zoom-in'].dispatch('click');
+const detailed = routes()[0].children.map(line => line.attributes.d.match(/^M ([\d.eE+-]+) ([\d.eE+-]+)/).slice(1).map(Number));
+const detailedSpacing = Math.hypot(detailed[0][0] - detailed[1][0], detailed[0][1] - detailed[1][1]);
+assert.ok(Math.abs(detailedSpacing - 4 * expectedMetersToSvg) < .001, 'detail scale uses four actual meters');
+for (let i = 0; i < 4; i++) nodes['#zoom-out'].dispatch('click');
 
 // Starting a pinch while drawing cancels the unfinished segment and still zooms.
 const previousWidth = Number(board.attributes.viewBox.split(' ')[2]);

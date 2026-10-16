@@ -569,10 +569,16 @@
         const group = document.createElementNS(SVG_NS, 'g');
         const canvasPoints = trackCanvasPoints(points, mode);
         if (canvasPoints.length < 2) return group;
-        const spacing = mode === 'kariya'
+        const zoom = canvasSize.width / view.width;
+        const actualSpacing = mode === 'kariya'
           ? DOUBLE_TRACK_SPACING_METERS * canvasUnitsPerMeter(points[0].lat)
           : BLANK_TRACK_SPACING;
-        const zoom = canvasSize.width / view.width;
+        // 広域表示では4mの2線が重なるため、視覚表示だけ間隔を補正する。
+        // 拡大すると補正が減り、詳細表示では実寸の4mに戻る。
+        const minScreenSpacing = Math.max(0, 6 - .55 * (zoom - 1));
+        const spacing = mode === 'kariya'
+          ? Math.max(actualSpacing, minScreenSpacing / zoom)
+          : actualSpacing;
         for (const direction of [-1, 1]) {
           const line = document.createElementNS(SVG_NS, 'path');
           line.setAttribute('d', offsetTrackPath(canvasPoints, direction * spacing / 2));
