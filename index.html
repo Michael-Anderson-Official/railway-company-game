@@ -66,6 +66,11 @@
       font-size: 12px; font-weight: 800; fill: #25374b;
       stroke: #fff; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke;
     }
+    .station-item { cursor: grab; }
+    .station-item.selected .track { stroke: #2158a3; }
+    .station-item.selected .platform { fill: #dce9ff; stroke: #2158a3; }
+    .station-item.selected .platform-label, .station-item.selected .map-label { fill: #174c97; }
+    .station-hit { fill: transparent; stroke: none; pointer-events: all; }
     .preview { opacity: .42; pointer-events: none; }
     .hint {
       position: absolute; bottom: 20px; left: 24px; pointer-events: none;
@@ -86,6 +91,30 @@
     .zoom-controls button { width: 42px; height: 42px; border-radius: 10px; border: 1px solid #d5dee7; background: #ffffffed; color: #203047; font-size: 24px; cursor: pointer; box-shadow: 0 2px 7px #15283f16; }
     .zoom-controls button:focus-visible { outline: 3px solid #86b3ff; }
     .map-credit { position: absolute; bottom: 11px; right: 12px; padding: 3px 6px; border-radius: 4px; background: #ffffffe3; color: #5d6977; font-size: 10px; }
+    .station-editor {
+      position: absolute; z-index: 3; bottom: 54px; left: 14px;
+      width: min(390px, calc(100% - 28px)); padding: 10px 12px;
+      background: #fffffff5; border: 1px solid #cbd8eb; border-radius: 12px;
+      box-shadow: 0 5px 18px #15283f24;
+    }
+    .station-editor[hidden] { display: none; }
+    .editor-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin-bottom: 7px; }
+    .editor-heading strong { display: block; font-size: 13px; color: #203047; }
+    .editor-heading span { font-size: 11px; color: #65758a; }
+    .editor-heading button {
+      border: 0; background: transparent; color: #65758a; font-size: 24px;
+      width: 32px; height: 32px; cursor: pointer;
+    }
+    .editor-rotation { display: flex; align-items: center; gap: 8px; }
+    .editor-rotation button {
+      flex: none; min-width: 56px; min-height: 42px; border: 1px solid #cbd8eb;
+      border-radius: 8px; background: #eef4ff; color: #2158a3;
+      font: inherit; font-size: 13px; font-weight: 750; cursor: pointer;
+    }
+    .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
+    .editor-rotation output { min-width: 35px; font-size: 12px; color: #203047; font-variant-numeric: tabular-nums; text-align: right; }
+    .editor-rotation button:focus-visible, .editor-heading button:focus-visible { outline: 3px solid #86b3ff; }
+    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
       .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
@@ -95,6 +124,7 @@
       .zoom-controls { top: 10px; right: 10px; }
       .zoom-controls button { width: 38px; height: 38px; }
       .map-credit { right: 7px; bottom: 4px; font-size: 9px; }
+      .station-editor { bottom: 46px; }
     }
   </style>
 </head>
@@ -140,7 +170,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">選択後タップで配置・2本指で拡大縮小</span>
+        <span class="tool-hint">タップで配置・置いた駅はドラッグで移動／選択して回転・2本指で拡大縮小</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -185,6 +215,19 @@
         <button type="button" id="zoom-in" aria-label="拡大">＋</button>
         <button type="button" id="zoom-out" aria-label="縮小">−</button>
       </div>
+      <div class="station-editor" id="station-editor" hidden>
+        <div class="editor-heading">
+          <div><strong id="selected-station-info">1面2線</strong><span>ドラッグで移動・角度で回転</span></div>
+          <button id="deselect-station" type="button" aria-label="駅の選択を解除">×</button>
+        </div>
+        <div class="editor-rotation">
+          <button id="rotate-left" type="button" aria-label="駅を反時計回りに15度回転">↶15°</button>
+          <label class="visually-hidden" for="station-angle">駅の回転角度</label>
+          <input id="station-angle" type="range" min="0" max="359" step="1" value="0" aria-label="駅の回転角度">
+          <output id="station-angle-value" for="station-angle">0°</output>
+          <button id="rotate-right" type="button" aria-label="駅を時計回りに15度回転">15°↷</button>
+        </div>
+      </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
     </section>
@@ -204,6 +247,10 @@
       const hint = document.querySelector('#hint');
       const mapData = document.querySelector('#map-data');
       const mapCredit = document.querySelector('#map-credit');
+      const stationEditor = document.querySelector('#station-editor');
+      const stationInfo = document.querySelector('#selected-station-info');
+      const stationAngle = document.querySelector('#station-angle');
+      const stationAngleValue = document.querySelector('#station-angle-value');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
       const touches = new Map();
@@ -241,6 +288,9 @@
       let placing = false;
       let mapMode = modeSelect.value;
       let selectedCars = Number(lengthSelect.value);
+      let nextStationId = 1;
+      let selectedStationId = null;
+      let stationDragStart = null;
       let canvasSize = { width: 1440, height: 820 };
       let view = { x: 0, y: 0, width: 1440, height: 820 };
       let pendingTouchPlacement = null;
@@ -366,11 +416,16 @@
         return platformWidth(carCount) / 2 + 40;
       }
 
-      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat) {
+      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = 0, stationId = null) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
         group.setAttribute('aria-label', `1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
+        if (stationId !== null) {
+          group.setAttribute('data-station-id', String(stationId));
+          group.setAttribute('class', `station-item${stationId === selectedStationId ? ' selected' : ''}`);
+        }
         const diagram = document.createElementNS(SVG_NS, 'g');
+        diagram.setAttribute('transform', `rotate(${rotation})`);
         const meters = city ? canvasUnitsPerMeter(latitude) : 1;
         const width = city ? carCount * CAR_LENGTH_METERS * meters : platformWidth(carCount);
         const platformHeight = city ? 8 * meters : 58;
@@ -415,10 +470,90 @@
           label.setAttribute('text-anchor', 'middle');
           label.setAttribute('transform', `translate(0 ${-14 / zoom}) scale(${1 / zoom})`);
         }
-        if (!city) diagram.append(label);
+        // 見た目を変えずに、指でもホーム全体を掴みやすくする透明の当たり判定。
+        if (stationId !== null) {
+          const zoom = canvasSize.width / view.width;
+          const hit = document.createElementNS(SVG_NS, 'rect');
+          hit.setAttribute('class', 'station-hit');
+          hit.setAttribute('x', String(-Math.max(width, 36 / zoom) / 2));
+          hit.setAttribute('y', String(-Math.max(platformHeight + 12 * meters, 36 / zoom) / 2));
+          hit.setAttribute('width', String(Math.max(width, 36 / zoom)));
+          hit.setAttribute('height', String(Math.max(platformHeight + 12 * meters, 36 / zoom)));
+          diagram.append(hit);
+        }
         group.append(diagram);
-        if (city) group.append(label);
+        group.append(label);
         return group;
+      }
+
+      function selectedStation() {
+        return positions.find(position => position.id === selectedStationId && position.mode === mapMode);
+      }
+
+      function updateStationEditor() {
+        const position = selectedStation();
+        stationEditor.hidden = !position;
+        if (!position) return;
+        stationInfo.textContent = `1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）`;
+        stationAngle.value = String(position.rotation);
+        stationAngleValue.textContent = `${position.rotation}°`;
+      }
+
+      function selectStation(id) {
+        selectedStationId = id;
+        redrawPlaced();
+        updateStationEditor();
+      }
+
+      function stationFromEvent(event) {
+        const target = event.target?.closest?.('[data-station-id]');
+        if (!target) return null;
+        const id = Number(target.getAttribute('data-station-id'));
+        return positions.find(position => position.id === id && position.mode === mapMode) || null;
+      }
+
+      function beginStationDrag(event, position) {
+        selectStation(position.id);
+        stationDragStart = {
+          id: position.id,
+          pointerId: event.pointerId,
+          screenX: event.clientX,
+          screenY: event.clientY,
+          original: { ...position }
+        };
+        svg.setPointerCapture(event.pointerId);
+        hint.textContent = `${position.carCount}両・${position.carCount * CAR_LENGTH_METERS}mのホームを編集中`;
+      }
+
+      function dragStation(event) {
+        if (!stationDragStart || stationDragStart.pointerId !== event.pointerId) return false;
+        const bounds = svg.getBoundingClientRect();
+        const dx = (event.clientX - stationDragStart.screenX) * view.width / bounds.width;
+        const dy = (event.clientY - stationDragStart.screenY) * view.height / bounds.height;
+        const position = selectedStation();
+        if (!position || position.id !== stationDragStart.id) return false;
+        if (mapMode === 'kariya') {
+          const start = geoToCanvas(stationDragStart.original.lon, stationDragStart.original.lat);
+          const next = canvasToGeo(start.x + dx, start.y + dy);
+          position.lon = next.lon;
+          position.lat = next.lat;
+        } else {
+          const margin = halfTrackWidth(position.carCount);
+          const x = stationDragStart.original.xRatio * canvasSize.width + dx;
+          const y = stationDragStart.original.yRatio * canvasSize.height + dy;
+          position.xRatio = Math.max(margin, Math.min(canvasSize.width - margin, x)) / canvasSize.width;
+          position.yRatio = Math.max(47, Math.min(canvasSize.height - 47, y)) / canvasSize.height;
+        }
+        redrawPlaced();
+        return true;
+      }
+
+      function setRotation(degrees) {
+        const position = selectedStation();
+        if (!position) return;
+        position.rotation = ((Math.round(degrees) % 360) + 360) % 360;
+        redrawPlaced();
+        updateStationEditor();
       }
 
       function pointerOnCanvas(event) {
@@ -499,10 +634,10 @@
         const point = pointerOnCanvas(event);
         if (!point) return;
         const position = mapMode === 'kariya'
-          ? { mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
-          : { mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
+          ? { id: nextStationId++, rotation: 0, mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
+          : { id: nextStationId++, rotation: 0, mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
         positions.push(position);
-        placed.append(createStation(point.x, point.y, selectedCars, mapMode === 'kariya', position.lat));
+        selectStation(position.id);
         hint.textContent = `1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
       }
@@ -511,13 +646,13 @@
         placed.replaceChildren(...positions.filter(position => position.mode === mapMode).map(position => {
           if (mapMode === 'kariya') {
             const point = geoToCanvas(position.lon, position.lat);
-            return createStation(point.x, point.y, position.carCount, true, position.lat);
+            return createStation(point.x, point.y, position.carCount, true, position.lat, position.rotation, position.id);
           }
           const margin = halfTrackWidth(position.carCount);
           return createStation(
             Math.max(margin, Math.min(canvasSize.width - margin, position.xRatio * canvasSize.width)),
             Math.max(47, Math.min(canvasSize.height - 47, position.yRatio * canvasSize.height)),
-            position.carCount
+            position.carCount, false, MAP_CENTER.lat, position.rotation, position.id
           );
         }));
       }
@@ -569,10 +704,27 @@
 
       modeSelect.addEventListener('change', () => {
         mapMode = modeSelect.value;
+        selectedStationId = null;
+        stationDragStart = null;
         touches.clear();
         pendingTouchPlacement = null;
         fitCanvas();
+        updateStationEditor();
         hint.textContent = mapMode === 'kariya' ? '刈谷市の地図にホームを配置できます' : '白紙のキャンバスにホームを配置できます';
+      });
+
+      stationAngle.addEventListener('input', () => setRotation(Number(stationAngle.value)));
+      document.querySelector('#rotate-left').addEventListener('click', () => {
+        const position = selectedStation();
+        if (position) setRotation(position.rotation - 15);
+      });
+      document.querySelector('#rotate-right').addEventListener('click', () => {
+        const position = selectedStation();
+        if (position) setRotation(position.rotation + 15);
+      });
+      document.querySelector('#deselect-station').addEventListener('click', () => {
+        selectStation(null);
+        hint.textContent = '「1面2線」を選んで配置できます';
       });
 
       document.querySelector('#zoom-in').addEventListener('click', () => zoomAtCenter(.5));
@@ -584,6 +736,10 @@
           if (!touch) return;
           touch.x = event.clientX;
           touch.y = event.clientY;
+          if (touches.size === 1 && dragStation(event)) {
+            event.preventDefault();
+            return;
+          }
           if (pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
               Math.hypot(touch.x - pendingTouchPlacement.x, touch.y - pendingTouchPlacement.y) > TAP_SLOP) {
             pendingTouchPlacement = null;
@@ -604,6 +760,7 @@
           event.preventDefault();
           return;
         }
+        if (dragStation(event)) return;
         if (mousePanStart) {
           const bounds = svg.getBoundingClientRect();
           applyView({
@@ -615,13 +772,22 @@
       });
       svg.addEventListener('pointerleave', () => preview.setAttribute('visibility', 'hidden'));
       svg.addEventListener('pointerdown', event => {
+        const hitStation = stationFromEvent(event);
         if (event.pointerType === 'touch') {
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
-          pendingTouchPlacement = touches.size === 1 && placing
-            ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
-          panStart = touches.size === 1 && mapMode === 'kariya'
-            ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
+          if (touches.size === 1 && hitStation) {
+            beginStationDrag(event, hitStation);
+            pendingTouchPlacement = null;
+            panStart = null;
+          } else {
+            stationDragStart = null;
+            if (touches.size === 1) selectStation(null);
+            pendingTouchPlacement = touches.size === 1 && placing
+              ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+            panStart = touches.size === 1 && mapMode === 'kariya'
+              ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
+          }
           pinchStart = null;
           beginPinch();
           preview.setAttribute('visibility', 'hidden');
@@ -629,22 +795,31 @@
           return;
         }
         if (event.button !== 0) return;
-        if (mapMode === 'kariya' && !placing) {
+        if (hitStation) {
+          beginStationDrag(event, hitStation);
+        } else if (mapMode === 'kariya' && !placing) {
+          selectStation(null);
           mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
           svg.setPointerCapture(event.pointerId);
-        } else placeStation(event);
+        } else {
+          selectStation(null);
+          placeStation(event);
+        }
         event.preventDefault();
       });
       svg.addEventListener('pointerup', event => {
         if (event.pointerType !== 'touch') {
+          stationDragStart = null;
           mousePanStart = null;
           return;
         }
+        const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
         const tap = pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
           touches.size === 1 &&
           Math.hypot(event.clientX - pendingTouchPlacement.x,
             event.clientY - pendingTouchPlacement.y) <= TAP_SLOP;
         touches.delete(event.pointerId);
+        if (finishedStationDrag) stationDragStart = null;
         pendingTouchPlacement = null;
         pinchStart = null;
         panStart = null;
@@ -654,6 +829,7 @@
       });
       svg.addEventListener('pointercancel', event => {
         touches.delete(event.pointerId);
+        if (stationDragStart?.pointerId === event.pointerId) stationDragStart = null;
         pendingTouchPlacement = null;
         pinchStart = null;
         panStart = null;
