@@ -41,8 +41,8 @@
     .tool svg { width: 42px; height: 25px; }
     .tool-hint { white-space: nowrap; font-size: 11px; color: #798493; }
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
-    #board { display: block; width: 100%; height: 100%; }
-    #board.placing { cursor: crosshair; touch-action: none; }
+    #board { display: block; width: 100%; height: 100%; touch-action: none; }
+    #board.placing { cursor: crosshair; }
     .track { fill: none; stroke: #303e4d; stroke-width: 5; stroke-linecap: round; }
     .platform { fill: #e8edf1; stroke: #778594; stroke-width: 2; }
     .platform-inset { fill: none; stroke: #b6c0ca; stroke-width: 1; }
@@ -75,7 +75,7 @@
           </svg>
           1面2線
         </button>
-        <span class="tool-hint">選択して白紙をクリックすると配置</span>
+        <span class="tool-hint">選択後タップで配置・2本指で拡大縮小</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -97,8 +97,14 @@
       const hint = document.querySelector('#hint');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
+      const touches = new Map();
+      const MAX_ZOOM = 4;
+      const TAP_SLOP = 14;
       let placing = false;
       let canvasSize = { width: 1440, height: 820 };
+      let view = { x: 0, y: 0, width: 1440, height: 820 };
+      let pendingTouchPlacement = null;
+      let pinchStart = null;
 
       // 島式ホーム1面を2本の線路で挟む、独立した配線ユニット。
       function createStation(x, y) {
@@ -143,6 +149,59 @@
         };
       }
 
+      function applyView(next) {
+        const width = Math.max(canvasSize.width / MAX_ZOOM, Math.min(canvasSize.width, next.width));
+        const height = width * canvasSize.height / canvasSize.width;
+        view = {
+          x: Math.max(0, Math.min(canvasSize.width - width, next.x)),
+          y: Math.max(0, Math.min(canvasSize.height - height, next.y)),
+          width,
+          height
+        };
+        svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
+      }
+
+      function beginPinch() {
+        if (touches.size !== 2) return;
+        const [a, b] = [...touches.values()];
+        const bounds = svg.getBoundingClientRect();
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        pinchStart = {
+          distance: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)),
+          width: view.width,
+          anchorX: view.x + (midX - bounds.left) / bounds.width * view.width,
+          anchorY: view.y + (midY - bounds.top) / bounds.height * view.height
+        };
+      }
+
+      function updatePinch() {
+        if (!pinchStart || touches.size !== 2) return;
+        const [a, b] = [...touches.values()];
+        const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
+        const bounds = svg.getBoundingClientRect();
+        const width = Math.max(canvasSize.width / MAX_ZOOM,
+          Math.min(canvasSize.width, pinchStart.width * pinchStart.distance / distance));
+        const height = width * canvasSize.height / canvasSize.width;
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        applyView({
+          x: pinchStart.anchorX - (midX - bounds.left) / bounds.width * width,
+          y: pinchStart.anchorY - (midY - bounds.top) / bounds.height * height,
+          width
+        });
+      }
+
+      function placeStation(event) {
+        if (!placing) return;
+        const point = pointerOnCanvas(event);
+        if (!point) return;
+        positions.push({ xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height });
+        placed.append(createStation(point.x, point.y));
+        hint.textContent = `1面2線：${positions.length}か所配置済み`;
+        preview.setAttribute('visibility', 'hidden');
+      }
+
       function fitCanvas() {
         const bounds = svg.getBoundingClientRect();
         if (!bounds.width || !bounds.height) return;
@@ -150,7 +209,8 @@
         const width = Math.max(480, Math.round(bounds.width * 1.05));
         const height = Math.round(width * bounds.height / bounds.width);
         canvasSize = { width, height };
-        svg.setAttribute('viewBox', `0 0 ${width} ${height}`);
+        applyView({ x: 0, y: 0, width });
+        pinchStart = null;
         placed.replaceChildren(...positions.map(({ xRatio, yRatio }) => createStation(
           Math.max(195, Math.min(width - 195, xRatio * width)),
           Math.max(47, Math.min(height - 47, yRatio * height))
@@ -159,7 +219,7 @@
       }
 
       function showPreview(event) {
-        if (!placing) return;
+        if (!placing || touches.size || event.pointerType === 'touch') return;
         const point = pointerOnCanvas(event);
         if (!point) return;
         preview.replaceChildren(createStation(point.x, point.y));
@@ -174,17 +234,58 @@
         hint.textContent = placing ? '白紙の好きな場所をクリックして配置' : '「1面2線」を選んで配置できます';
       });
 
-      svg.addEventListener('pointermove', showPreview);
+      svg.addEventListener('pointermove', event => {
+        if (event.pointerType === 'touch') {
+          const touch = touches.get(event.pointerId);
+          if (!touch) return;
+          touch.x = event.clientX;
+          touch.y = event.clientY;
+          if (pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
+              Math.hypot(touch.x - pendingTouchPlacement.x, touch.y - pendingTouchPlacement.y) > TAP_SLOP) {
+            pendingTouchPlacement = null;
+          }
+          updatePinch();
+          event.preventDefault();
+          return;
+        }
+        showPreview(event);
+      });
       svg.addEventListener('pointerleave', () => preview.setAttribute('visibility', 'hidden'));
       svg.addEventListener('pointerdown', event => {
-        if (!placing || event.button !== 0) return;
-        const point = pointerOnCanvas(event);
-        if (!point) return;
-        positions.push({ xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height });
-        placed.append(createStation(point.x, point.y));
-        hint.textContent = `1面2線：${positions.length}か所配置済み`;
-        preview.setAttribute('visibility', 'hidden');
+        if (event.pointerType === 'touch') {
+          touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
+          svg.setPointerCapture(event.pointerId);
+          pendingTouchPlacement = touches.size === 1 && placing
+            ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+          pinchStart = null;
+          beginPinch();
+          preview.setAttribute('visibility', 'hidden');
+          event.preventDefault();
+          return;
+        }
+        if (event.button !== 0) return;
+        placeStation(event);
         event.preventDefault();
+      });
+      svg.addEventListener('pointerup', event => {
+        if (event.pointerType !== 'touch') return;
+        const tap = pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
+          touches.size === 1 &&
+          Math.hypot(event.clientX - pendingTouchPlacement.x,
+            event.clientY - pendingTouchPlacement.y) <= TAP_SLOP;
+        touches.delete(event.pointerId);
+        pendingTouchPlacement = null;
+        pinchStart = null;
+        beginPinch();
+        if (tap) placeStation(event);
+        event.preventDefault();
+      });
+      svg.addEventListener('pointercancel', event => {
+        touches.delete(event.pointerId);
+        pendingTouchPlacement = null;
+        pinchStart = null;
+        beginPinch();
+        preview.setAttribute('visibility', 'hidden');
       });
 
       window.addEventListener('resize', fitCanvas);
