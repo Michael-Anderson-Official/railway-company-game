@@ -299,7 +299,7 @@
         <p class="track-note" id="track-destination">地図上の行き先をタップして、終点を決めてください。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">長さ・角度・曲線は自動計算します。地図をドラッグすると移動、2本指で拡大縮小できます。急カーブや交差する線路は建設できません。</p>
+        <p class="track-note">長さ・角度・曲線は自動計算し、必要なら接続元も自動選択します。ドラッグは地図移動、2本指は拡大縮小。急カーブや交差する線路は建設できません。</p>
       </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
@@ -849,6 +849,19 @@
         trackDestination = mapMode === 'kariya'
           ? canvasToGeo(point.x, point.y)
           : { xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height };
+        const geometries = currentTrackGeometry();
+        const selected = availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value);
+        const current = selected && validateTrack(selected.source, trackDestination, geometries);
+        // 目的地が現在選択中の線路端と逆方向なら、到達できる空き端を自動選択。
+        // 交差やホームへの食い込みが原因なら勝手に発駅を切り替えない。
+        if (current?.error?.includes('急旋回')) {
+          const alternatives = availableTrackOrigins
+            .filter(origin => origin.key !== selected.key)
+            .map(origin => ({ origin, result: validateTrack(origin.source, trackDestination, geometries) }))
+            .filter(candidate => !candidate.result.error)
+            .sort((a, b) => a.result.lengthMeters - b.result.lengthMeters);
+          if (alternatives.length) trackOriginSelect.value = alternatives[0].origin.key;
+        }
         renderTrackPreview();
         hint.textContent = trackBuildButton.disabled
           ? 'ここには敷設できません。終点を別の場所にタップしてください'

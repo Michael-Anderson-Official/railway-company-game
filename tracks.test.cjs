@@ -135,6 +135,14 @@ const expectedMetersToSvg = 256 * 2 ** 13 * .9 / (2 * Math.PI * 6378137 * Math.c
 const stationCenter = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
 const leftEnd = { x: Number(stationCenter[1]) - 120 * expectedMetersToSvg, y: Number(stationCenter[2]) };
 
+// A tap on the opposite side of a station automatically chooses the usable open end.
+tapTarget(Number(stationCenter[1]) + 900 * expectedMetersToSvg, leftEnd.y);
+assert.equal(nodes['#track-origin'].value, 'station:1:1');
+assert.equal(nodes['#build-track'].disabled, false);
+nodes['#track-origin'].value = 'station:1:-1';
+nodes['#track-origin'].dispatch('change');
+assert.equal(nodes['#build-track'].disabled, true);
+
 // An automatic curve of 160m with a 30-degree bearing change is too sharp.
 tapTarget(leftEnd.x - 160 * Math.cos(Math.PI / 6) * expectedMetersToSvg,
   leftEnd.y - 160 * Math.sin(Math.PI / 6) * expectedMetersToSvg);
