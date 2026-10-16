@@ -41,13 +41,14 @@ class Element {
 
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#preview',
-  '#place-tool', '#track-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
+  '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
   '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation'
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';
+nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 const samples = [
   [0, 100], [500, 200], [700, 300], [880, 400]
@@ -115,6 +116,17 @@ async function run() {
   board.dispatch('pointerup', { pointerType: 'mouse', pointerId: 12, button: 0,
     clientX: 390, clientY: 300, target: board });
   assert.match(nodes['#demand-overview'].textContent, /潜在利用人口 320人/);
+
+  // The editing floor changes visible catchment rings, but citywide station demand persists.
+  nodes['#floor-level'].value = '-2';
+  nodes['#floor-level'].dispatch('change');
+  assert.equal(nodes['#placed'].children.length, 0);
+  assert.equal(nodes['#catchment-rings'].children.length, 0);
+  assert.match(nodes['#demand-overview'].textContent, /設置駅2駅・潜在利用人口 320人/);
+  nodes['#floor-level'].value = '-1';
+  nodes['#floor-level'].dispatch('change');
+  assert.equal(nodes['#placed'].children.length, 2);
+  assert.equal(nodes['#catchment-rings'].children.filter(child => child.attributes.r).length, 2);
 
   nodes['#map-mode'].value = 'blank';
   nodes['#map-mode'].dispatch('change');

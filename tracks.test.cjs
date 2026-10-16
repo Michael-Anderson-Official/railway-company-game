@@ -43,7 +43,7 @@ class Element {
 
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
-  '#placed', '#preview', '#place-tool', '#track-tool', '#map-mode', '#car-count',
+  '#placed', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
@@ -52,6 +52,7 @@ const ids = [
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
 nodes['#map-mode'].value = 'kariya';
+nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 const board = nodes['#board'];
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
@@ -257,4 +258,40 @@ mouse('pointerup', 200, 200);
 assert.equal(nodes['#placed'].children.length, 3);
 assert.equal(routes().length, 2);
 
-console.log('Tap-to-destination automatic tracks, smooth radius safety, exact endpoint, station locking, 4m scale, touch/pinch and map isolation OK');
+// Each underground floor has its own stations and tracks, including the same XY position.
+nodes['#floor-level'].value = '-2';
+nodes['#floor-level'].dispatch('change');
+assert.equal(nodes['#placed'].children.length, 0, 'B2 does not display B1 stations');
+assert.equal(routes().length, 0, 'B2 does not display B1 tracks');
+nodes['#track-tool'].dispatch('click');
+assert.equal(nodes['#build-track'].disabled, true, 'no rail endpoint exists on an empty floor');
+nodes['#place-tool'].dispatch('click');
+mouseTap(200, 300);
+assert.equal(nodes['#placed'].children.length, 1);
+assert.match(nodes['#placed'].children[0].attributes['aria-label'], /地下2階（-20m）/);
+nodes['#track-tool'].dispatch('click');
+assert.equal(nodes['#track-origin'].children.length, 2, 'B2 offers only B2 station endpoints');
+const b2Center = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+tapTarget(Number(b2Center[1]) - 850 * expectedMetersToSvg, Number(b2Center[2]));
+assert.equal(nodes['#build-track'].disabled, false, 'B1 line at the same level XY does not block B2');
+commit();
+assert.equal(routes().length, 1);
+nodes['#floor-level'].value = '-1';
+nodes['#floor-level'].dispatch('change');
+assert.equal(routes().length, 2, 'B1 tracks remain after building B2');
+assert.equal(nodes['#placed'].children.length, 3, 'B1 stations remain unchanged');
+nodes['#floor-level'].value = '-2';
+nodes['#floor-level'].dispatch('change');
+assert.equal(routes().length, 1);
+assert.equal(nodes['#placed'].children.length, 1);
+for (const floor of ['-3', '-4', '-5', '0']) {
+  nodes['#floor-level'].value = floor;
+  nodes['#floor-level'].dispatch('change');
+  assert.equal(routes().length, 0, `floor ${floor} starts with no routes`);
+  assert.equal(nodes['#placed'].children.length, 0, `floor ${floor} starts with no stations`);
+  assert.equal(nodes['#track-origin'].children.length, 0);
+}
+assert.match(html, /<option value="-5">地下5階（−50m）<\/option>/);
+assert.match(html, /\.map-tiles \{ opacity: \.62; \}/);
+
+console.log('Automatic tracks, safety, mobile gestures, map and six-floor isolation OK');

@@ -52,7 +52,7 @@
     #board.placing { cursor: crosshair; }
     #board.laying-track { cursor: crosshair; }
     .map-tiles, .map-markers { pointer-events: none; }
-    .map-tiles { opacity: .93; }
+    .map-tiles { opacity: .62; }
     .catchment-rings { pointer-events: none; }
     .catchment-ring { fill: #467de2; fill-opacity: .045; stroke: #376bc4; stroke-opacity: .5; }
     .catchment-ring.selected-outer { fill-opacity: .07; stroke-opacity: .95; }
@@ -203,6 +203,17 @@
           </select>
         </div>
         <div class="length-control">
+          <label for="floor-level">階層</label>
+          <select id="floor-level" aria-label="駅と線路を配置する階層">
+            <option value="0">地上（0m）</option>
+            <option value="-1" selected>地下1階（−10m）</option>
+            <option value="-2">地下2階（−20m）</option>
+            <option value="-3">地下3階（−30m）</option>
+            <option value="-4">地下4階（−40m）</option>
+            <option value="-5">地下5階（−50m）</option>
+          </select>
+        </div>
+        <div class="length-control">
           <label for="car-count">ホーム長</label>
           <select id="car-count" aria-label="ホームの対応両数">
             <option value="2">2両・40m</option>
@@ -222,7 +233,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">駅を配置したら、複線の接続元を選択し、行き先をタップするだけで線路が自動でつながります</span>
+        <span class="tool-hint">階層を切り替えて駅・複線を配置。線路は同じ階の駅端から、行き先のタップで自動接続します</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -299,7 +310,7 @@
         <p class="track-note" id="track-destination">地図上の行き先をタップして、終点を決めてください。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">長さ・角度・曲線は自動計算し、必要なら接続元も自動選択します。ドラッグは地図移動、2本指は拡大縮小。急カーブや交差する線路は建設できません。</p>
+        <p class="track-note">選択中の階層にのみ敷設します。長さ・角度・曲線は自動計算し、必要なら接続元も自動選択。ドラッグは地図移動、2本指は拡大縮小。急カーブや同じ階の線路との交差は建設できません。</p>
       </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
@@ -320,6 +331,7 @@
       const button = document.querySelector('#place-tool');
       const trackButton = document.querySelector('#track-tool');
       const modeSelect = document.querySelector('#map-mode');
+      const floorSelect = document.querySelector('#floor-level');
       const lengthSelect = document.querySelector('#car-count');
       const hint = document.querySelector('#hint');
       const mapData = document.querySelector('#map-data');
@@ -393,6 +405,7 @@
       let availableTrackOrigins = [];
       let trackDestination = null;
       let mapMode = modeSelect.value;
+      let currentLevel = Number(floorSelect.value);
       let selectedCars = Number(lengthSelect.value);
       let nextStationId = 1;
       let selectedStationId = null;
@@ -479,7 +492,7 @@
           catchmentRings.replaceChildren();
           return;
         }
-        const visibleStations = positions.filter(position => position.mode === 'kariya');
+        const visibleStations = positions.filter(position => position.mode === 'kariya' && (position.level ?? 0) === currentLevel);
         const zoom = canvasSize.width / view.width;
         const rings = [];
         for (const position of visibleStations) {
@@ -588,13 +601,21 @@
         return ((target - start + 540) % 360) - 180;
       }
 
+      function floorLabel(level = currentLevel) {
+        return level === 0 ? '地上（0m）' : `地下${-level}階（${level * 10}m）`;
+      }
+
+      function isOnCurrentLevel(item) {
+        return item.mode === mapMode && (item.level ?? 0) === currentLevel;
+      }
+
       function stationHasRailConnection(id) {
         return trackSections.some(section => section.source.type === 'station' && section.source.stationId === id);
       }
 
       function currentTrackGeometry() {
         const geometries = new Map();
-        for (const section of trackSections.filter(section => section.mode === mapMode)) {
+        for (const section of trackSections.filter(isOnCurrentLevel)) {
           const origin = resolveTrackOrigin(section.source, geometries);
           if (origin) {
             const result = makeAutomaticTrack(origin, targetCanvasPoint(section.target));
@@ -618,7 +639,7 @@
           return { x: last.x, y: last.y, heading: last.heading, spacing: parent.endSpacing,
             scale: parent.scale, stationId: parent.stationId, stationSource: false };
         }
-        const station = positions.find(position => position.id === source.stationId && position.mode === mapMode);
+        const station = positions.find(position => position.id === source.stationId && isOnCurrentLevel(position));
         if (!station) return null;
         const center = stationCanvasCenter(station);
         const scale = mapMode === 'kariya' ? canvasUnitsPerMeter(station.lat) : 1;
@@ -761,7 +782,7 @@
         const calculated = makeAutomaticTrack(origin, targetCanvasPoint(target));
         if (calculated.error) return calculated;
         const candidate = calculated.geometry;
-        const existingSections = trackSections.filter(section => section.mode === mapMode);
+        const existingSections = trackSections.filter(isOnCurrentLevel);
         for (const section of existingSections) {
           const existing = geometries.get(section.id);
           if (!existing) continue;
@@ -786,7 +807,7 @@
             }
           }
         }
-        for (const station of positions.filter(position => position.mode === mapMode)) {
+        for (const station of positions.filter(isOnCurrentLevel)) {
           const center = stationCanvasCenter(station);
           const scale = mapMode === 'kariya' ? canvasUnitsPerMeter(station.lat) : 1;
           const halfLength = mapMode === 'kariya'
@@ -813,17 +834,17 @@
       }
 
       function syncTrackOrigins(preferredKey = trackOriginSelect.value) {
-        const occupied = new Set(trackSections.filter(section => section.mode === mapMode)
+        const occupied = new Set(trackSections.filter(isOnCurrentLevel)
           .map(section => trackOriginKey(section.source)));
         availableTrackOrigins = [];
-        for (const station of positions.filter(position => position.mode === mapMode)) {
+        for (const station of positions.filter(isOnCurrentLevel)) {
           for (const side of [-1, 1]) {
             const source = { type: 'station', stationId: station.id, side };
             const key = trackOriginKey(source);
             if (!occupied.has(key)) availableTrackOrigins.push({ key, source, label: `${station.name} ${side === 1 ? '右端' : '左端'}` });
           }
         }
-        for (const section of trackSections.filter(section => section.mode === mapMode)) {
+        for (const section of trackSections.filter(isOnCurrentLevel)) {
           const source = { type: 'section', sectionId: section.id };
           const key = trackOriginKey(source);
           if (!occupied.has(key)) availableTrackOrigins.push({ key, source, label: `複線${section.id}の先端` });
@@ -891,7 +912,7 @@
 
       function renderTracks() {
         const geometries = currentTrackGeometry();
-        tracksLayer.replaceChildren(...trackSections.filter(section => section.mode === mapMode)
+        tracksLayer.replaceChildren(...trackSections.filter(isOnCurrentLevel)
           .filter(section => geometries.has(section.id))
           .map(section => createDoubleTrack(geometries.get(section.id), false, section.id)));
         renderTrackPreview();
@@ -981,10 +1002,10 @@
         return platformWidth(carCount) / 2 + 40;
       }
 
-      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = 0, stationId = null, name = '') {
+      function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = 0, stationId = null, name = '', level = currentLevel) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
-        group.setAttribute('aria-label', `${name ? `${name}／` : ''}1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
+        group.setAttribute('aria-label', `${name ? `${name}／` : ''}${floorLabel(level)}／1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
         if (stationId !== null) {
           group.setAttribute('data-station-id', String(stationId));
           group.setAttribute('class', `station-item${stationId === selectedStationId ? ' selected' : ''}`);
@@ -1095,7 +1116,7 @@
       }
 
       function selectedStation() {
-        return positions.find(position => position.id === selectedStationId && position.mode === mapMode);
+        return positions.find(position => position.id === selectedStationId && isOnCurrentLevel(position));
       }
 
       function updateStationEditor() {
@@ -1103,7 +1124,7 @@
         stationEditor.hidden = layingTrack || !position;
         if (!position) return;
         const connected = stationHasRailConnection(position.id);
-        stationInfo.textContent = `1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）${connected ? '・線路接続済み（位置固定）' : ''}`;
+        stationInfo.textContent = `${floorLabel(position.level)}・1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）${connected ? '・線路接続済み（位置固定）' : ''}`;
         stationNameInput.value = position.name;
         stationAngle.value = String(position.rotation);
         stationAngle.disabled = connected;
@@ -1128,14 +1149,14 @@
         const target = event.target?.closest?.('[data-station-id]');
         if (!target) return null;
         const id = Number(target.getAttribute('data-station-id'));
-        return positions.find(position => position.id === id && position.mode === mapMode) || null;
+        return positions.find(position => position.id === id && isOnCurrentLevel(position)) || null;
       }
 
       function rotationGripFromEvent(event) {
         const grip = event.target?.closest?.('[data-rotate-station-id]');
         if (!grip) return null;
         const id = Number(grip.getAttribute('data-rotate-station-id'));
-        return positions.find(position => position.id === id && position.mode === mapMode) || null;
+        return positions.find(position => position.id === id && isOnCurrentLevel(position)) || null;
       }
 
       function stationCanvasCenter(position) {
@@ -1321,29 +1342,29 @@
         const point = pointerOnCanvas(event);
         if (!point) return;
         const position = mapMode === 'kariya'
-          ? { id: nextStationId++, rotation: 0, mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
-          : { id: nextStationId++, rotation: 0, mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
+          ? { id: nextStationId++, rotation: 0, mode: mapMode, level: currentLevel, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
+          : { id: nextStationId++, rotation: 0, mode: mapMode, level: currentLevel, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
         position.name = `新駅${position.id}`;
         positions.push(position);
         if (mapMode === 'kariya') demandRevision++;
         selectStation(position.id);
         syncTrackOrigins();
-        hint.textContent = `1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
+        hint.textContent = `${floorLabel()}：1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）を${positions.filter(isOnCurrentLevel).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
       }
 
       function redrawPlaced() {
         renderTracks();
-        placed.replaceChildren(...positions.filter(position => position.mode === mapMode).map(position => {
+        placed.replaceChildren(...positions.filter(isOnCurrentLevel).map(position => {
           if (mapMode === 'kariya') {
             const point = geoToCanvas(position.lon, position.lat);
-            return createStation(point.x, point.y, position.carCount, true, position.lat, position.rotation, position.id, position.name);
+            return createStation(point.x, point.y, position.carCount, true, position.lat, position.rotation, position.id, position.name, position.level);
           }
           const margin = halfTrackWidth(position.carCount);
           return createStation(
             Math.max(margin, Math.min(canvasSize.width - margin, position.xRatio * canvasSize.width)),
             Math.max(47, Math.min(canvasSize.height - 47, position.yRatio * canvasSize.height)),
-            position.carCount, false, MAP_CENTER.lat, position.rotation, position.id, position.name
+            position.carCount, false, MAP_CENTER.lat, position.rotation, position.id, position.name, position.level
           );
         }));
         renderCatchmentRings();
@@ -1430,12 +1451,12 @@
           return;
         }
         const id = nextTrackSectionId++;
-        trackSections.push({ id, mode: mapMode, source: { ...selected.source }, target: { ...trackDestination } });
+        trackSections.push({ id, mode: mapMode, level: currentLevel, source: { ...selected.source }, target: { ...trackDestination } });
         trackDestination = null;
         syncTrackOrigins(`section:${id}`);
         redrawPlaced();
         updateStationEditor();
-        hint.textContent = `複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを自動敷設しました。次の行き先をタップして延長できます`;
+        hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを自動敷設しました。次の行き先をタップして延長できます`;
       });
 
       lengthSelect.addEventListener('change', () => {
@@ -1455,7 +1476,25 @@
         pendingTouchPlacement = null;
         fitCanvas();
         updateStationEditor();
-        hint.textContent = mapMode === 'kariya' ? '刈谷市の地図にホームを配置できます' : '白紙のキャンバスにホームを配置できます';
+        hint.textContent = `${floorLabel()}：${mapMode === 'kariya' ? '刈谷市の地図' : '白紙のキャンバス'}にホームを配置できます`;
+      });
+
+      floorSelect.addEventListener('change', () => {
+        currentLevel = Number(floorSelect.value);
+        selectedStationId = null;
+        stationDragStart = null;
+        rotationDragStart = null;
+        mousePanStart = null;
+        panStart = null;
+        pinchStart = null;
+        touches.clear();
+        pendingTouchPlacement = null;
+        trackDestination = null;
+        preview.setAttribute('visibility', 'hidden');
+        redrawPlaced();
+        syncTrackOrigins();
+        updateStationEditor();
+        hint.textContent = `${floorLabel()}を編集中。駅・線路は選択した階層だけに表示・配置されます`;
       });
 
       stationAngle.addEventListener('input', () => setRotation(Number(stationAngle.value)));
