@@ -44,7 +44,7 @@ const nodes = Object.fromEntries([
   '#place-tool', '#track-tool', '#map-mode', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
-  '#track-editor', '#track-origin', '#track-length', '#track-angle', '#build-track', '#track-validation'
+  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation'
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';

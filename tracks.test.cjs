@@ -47,14 +47,12 @@ const ids = [
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
-  '#track-editor', '#track-origin', '#track-length', '#track-angle', '#build-track', '#track-validation'
+  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation'
 ];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
 nodes['#map-mode'].value = 'kariya';
 nodes['#car-count'].value = '10';
-nodes['#track-length'].value = '500';
-nodes['#track-angle'].value = '0';
 const board = nodes['#board'];
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
@@ -72,10 +70,17 @@ function touch(name, id, x, y) { pointer('touch', name, id, x, y); }
 function mouse(name, x, y) { pointer('mouse', name, 90, x, y); }
 function routes() { return nodes['#tracks'].children; }
 function preview() { return nodes['#track-preview'].children; }
-function setTrack(length, angle) {
-  nodes['#track-length'].value = String(length);
-  nodes['#track-angle'].value = String(angle);
-  nodes['#track-angle'].dispatch('input');
+function mouseTap(x, y) { mouse('pointerdown', x, y); mouse('pointerup', x, y); }
+function screenFromCanvas(x, y) {
+  const [startX, startY, width, height] = board.attributes.viewBox.split(' ').map(Number);
+  return { x: (x - startX) * 400 / width, y: (y - startY) * 600 / height };
+}
+function tapTarget(x, y, touchId = null) {
+  const p = screenFromCanvas(x, y);
+  if (touchId !== null) {
+    touch('pointerdown', touchId, p.x, p.y);
+    touch('pointerup', touchId, p.x, p.y);
+  } else mouseTap(p.x, p.y);
 }
 function pathPoints(path) {
   const values = (typeof path === 'string' ? path : path.attributes.d).matchAll(/[ML] ([\d.eE+-]+) ([\d.eE+-]+)/g);
@@ -86,6 +91,11 @@ function endpointGap(group, last = false) {
   const b = pathPoints(group.children[1].attributes.d);
   const i = last ? a.length - 1 : 0;
   return Math.hypot(a[i].x - b[i].x, a[i].y - b[i].y);
+}
+function terminalCenter(group) {
+  const a = pathPoints(group.children[0].attributes.d).at(-1);
+  const b = pathPoints(group.children[1].attributes.d).at(-1);
+  return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
 function commit() { nodes['#build-track'].dispatch('click'); }
 
@@ -118,19 +128,28 @@ nodes['#track-tool'].dispatch('click');
 assert.equal(nodes['#track-editor'].hidden, false);
 assert.equal(nodes['#track-origin'].children.length, 2);
 assert.equal(nodes['#track-origin'].value, 'station:1:-1');
-assert.equal(Number(nodes['#track-angle'].value), 180);
-assert.equal(nodes['#build-track'].disabled, false);
-assert.equal(preview().length, 1);
-assert.equal(preview()[0].children.length, 2);
+assert.equal(nodes['#build-track'].disabled, true, 'a destination is required');
+assert.equal(preview().length, 0);
 
-// A sharp 90-degree curve in 120m violates the 160m minimum radius.
-setTrack(120, 90);
+const expectedMetersToSvg = 256 * 2 ** 13 * .9 / (2 * Math.PI * 6378137 * Math.cos(35.004 * Math.PI / 180));
+const stationCenter = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+const leftEnd = { x: Number(stationCenter[1]) - 120 * expectedMetersToSvg, y: Number(stationCenter[2]) };
+
+// An automatic curve of 160m with a 30-degree bearing change is too sharp.
+tapTarget(leftEnd.x - 160 * Math.cos(Math.PI / 6) * expectedMetersToSvg,
+  leftEnd.y - 160 * Math.sin(Math.PI / 6) * expectedMetersToSvg);
 assert.equal(nodes['#build-track'].disabled, true);
 assert.match(nodes['#track-validation'].textContent, /最小曲線半径160m/);
 commit();
 assert.equal(routes().length, 0);
-setTrack(500, 180);
+
+// A map tap computes the route, displays a two-track preview and builds exactly to the tap.
+const chosenEnd = { x: leftEnd.x - 600 * expectedMetersToSvg, y: leftEnd.y };
+tapTarget(chosenEnd.x, chosenEnd.y, 13);
 assert.equal(nodes['#build-track'].disabled, false);
+assert.equal(preview().length, 1);
+assert.equal(preview()[0].children.length, 3, 'two rails and the target marker');
+assert.match(nodes['#track-destination'].textContent, /約600m/);
 commit();
 assert.equal(routes().length, 1);
 assert.equal(routes()[0].children.length, 2);
@@ -138,9 +157,11 @@ assert.match(routes()[0].children[0].attributes.d, /^M /);
 assert.match(routes()[0].children[1].attributes.d, /^M /);
 
 // At the station the two rails match the station's 12m spacing, then taper to 4m.
-const expectedMetersToSvg = 256 * 2 ** 13 * .9 / (2 * Math.PI * 6378137 * Math.cos(35.004 * Math.PI / 180));
 assert.ok(Math.abs(endpointGap(routes()[0]) - 12 * expectedMetersToSvg) < .005);
 assert.ok(Math.abs(endpointGap(routes()[0], true) - 6) < .001, 'overview preserves visible rails');
+const terminal = terminalCenter(routes()[0]);
+assert.ok(Math.hypot(terminal.x - chosenEnd.x, terminal.y - chosenEnd.y) < .01,
+  'the committed centerline ends at the exact tapped point');
 for (let i = 0; i < 4; i++) nodes['#zoom-in'].dispatch('click');
 assert.ok(Math.abs(endpointGap(routes()[0], true) - 4 * expectedMetersToSvg) < .005, 'detail uses 4 actual meters');
 for (let i = 0; i < 4; i++) nodes['#zoom-out'].dispatch('click');
@@ -148,26 +169,44 @@ for (let i = 0; i < 4; i++) nodes['#zoom-out'].dispatch('click');
 // After construction only the free tip can extend this segment, without an implicit turnout.
 assert.equal(nodes['#track-origin'].children.length, 2, 'opposite station end + free section tip');
 assert.equal(nodes['#track-origin'].value, 'section:1');
-assert.equal(Number(nodes['#track-angle'].value), 180);
-setTrack(500, 180);
+assert.equal(nodes['#build-track'].disabled, true, 'another tap is required for continuation');
+const nextEnd = { x: chosenEnd.x - 600 * expectedMetersToSvg, y: chosenEnd.y };
+tapTarget(nextEnd.x, nextEnd.y);
+assert.equal(nodes['#build-track'].disabled, false);
 const before = pathPoints(routes()[0].children[0].attributes.d).at(-1);
 commit();
 assert.equal(routes().length, 2);
 const after = pathPoints(routes()[1].children[0].attributes.d)[0];
 assert.ok(Math.hypot(before.x - after.x, before.y - after.y) < .01, 'continuation joins exactly');
 
-// An attempted U-turn or collision is refused; station connections cannot be broken by movement.
-setTrack(20, 0);
+// An attempted U-turn is refused; station connections cannot be broken by movement.
+const now = terminalCenter(routes()[1]);
+tapTarget(now.x + 500 * expectedMetersToSvg, now.y);
 assert.equal(nodes['#build-track'].disabled, true);
-assert.match(nodes['#track-validation'].textContent, /90°/);
-assert.equal(nodes['#station-angle'].disabled, true, 'connected stations are rotation-locked');
+assert.match(nodes['#track-validation'].textContent, /急旋回/);
+nodes['#track-tool'].dispatch('click');
 const stationTransform = nodes['#placed'].children[0].attributes.transform;
 const station = nodes['#placed'].children[0];
 const target = { closest: () => station, getAttribute: key => station.getAttribute(key) };
 board.dispatch('pointerdown', { pointerType: 'mouse', pointerId: 9, clientX: 200, clientY: 300, button: 0, target, preventDefault() {} });
+assert.equal(nodes['#station-angle'].disabled, true, 'connected stations are rotation-locked');
 mouse('pointermove', 250, 330);
 mouse('pointerup', 250, 330);
 assert.equal(nodes['#placed'].children[0].attributes.transform, stationTransform);
+nodes['#track-tool'].dispatch('click');
+
+// An automatically suggested straight route cannot pass through another station.
+nodes['#place-tool'].dispatch('click');
+tapTarget(Number(stationCenter[1]) + 500 * expectedMetersToSvg, Number(stationCenter[2]));
+assert.equal(nodes['#placed'].children.length, 2);
+nodes['#track-tool'].dispatch('click');
+nodes['#track-origin'].value = 'station:1:1';
+nodes['#track-origin'].dispatch('change');
+assert.equal(nodes['#track-origin'].value, 'station:1:1');
+tapTarget(Number(stationCenter[1]) + 1300 * expectedMetersToSvg, Number(stationCenter[2]));
+assert.equal(nodes['#build-track'].disabled, true);
+assert.match(nodes['#track-validation'].textContent, /駅のホーム/);
+assert.equal(routes().length, 2, 'a route through another station was not built');
 
 // Pinching must still zoom and must not construct rails.
 const previousWidth = Number(board.attributes.viewBox.split(' ')[2]);
@@ -189,7 +228,10 @@ nodes['#place-tool'].dispatch('click');
 mouse('pointerdown', 200, 200);
 mouse('pointerup', 200, 200);
 nodes['#track-tool'].dispatch('click');
-setTrack(500, 180);
+const blankCenter = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+const blankEnd = { x: Number(blankCenter[1]) - 164, y: Number(blankCenter[2]) };
+tapTarget(blankEnd.x - 500, blankEnd.y);
+assert.equal(nodes['#build-track'].disabled, false);
 commit();
 assert.equal(routes().length, 1);
 assert.equal(routes()[0].children.length, 2);
@@ -204,7 +246,7 @@ assert.equal(nodes['#place-tool'].attributes['aria-pressed'], 'true');
 assert.equal(nodes['#track-editor'].hidden, true);
 mouse('pointerdown', 200, 200);
 mouse('pointerup', 200, 200);
-assert.equal(nodes['#placed'].children.length, 2);
+assert.equal(nodes['#placed'].children.length, 3);
 assert.equal(routes().length, 2);
 
-console.log('Connected length/angle double tracks, radius safety, station locking, 4m scale, touch/pinch and map isolation OK');
+console.log('Tap-to-destination automatic tracks, smooth radius safety, exact endpoint, station locking, 4m scale, touch/pinch and map isolation OK');

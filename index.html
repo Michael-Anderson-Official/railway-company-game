@@ -50,7 +50,7 @@
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
     #board { display: block; width: 100%; height: 100%; touch-action: none; }
     #board.placing { cursor: crosshair; }
-    #board.laying-track { cursor: grab; }
+    #board.laying-track { cursor: crosshair; }
     .map-tiles, .map-markers { pointer-events: none; }
     .map-tiles { opacity: .93; }
     .catchment-rings { pointer-events: none; }
@@ -62,6 +62,7 @@
     .double-track, .track-preview { pointer-events: none; }
     .double-track path { fill: none; stroke: #27384d; stroke-linecap: round; stroke-linejoin: round; }
     .track-preview path { fill: none; stroke: #3274cf; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5; }
+    .track-preview .track-target { fill: #fff; stroke: #3274cf; }
     .track { fill: none; stroke: #303e4d; stroke-linecap: round; }
     .platform { fill: #e8edf1; stroke: #778594; }
     .platform-inset { fill: none; stroke: #b6c0ca; }
@@ -144,7 +145,7 @@
     }
     .track-editor[hidden] { display: none; }
     .track-editor-title { margin: 0 0 9px; color: #203047; font-weight: 800; font-size: 13px; }
-    .track-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; }
+    .track-fields { display: grid; grid-template-columns: 1fr; gap: 9px; }
     .track-field { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
     .track-field.origin-field { grid-column: 1 / -1; }
     .track-field label { font-size: 12px; color: #516176; font-weight: 700; }
@@ -221,7 +222,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">駅はタップで配置。複線は駅の線路端を選び、長さと角度を指定して敷設できます</span>
+        <span class="tool-hint">駅を配置したら、複線の接続元を選択し、行き先をタップするだけで線路が自動でつながります</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -294,18 +295,11 @@
             <label for="track-origin">接続する線路端</label>
             <select id="track-origin" aria-label="接続する駅の線路端"></select>
           </div>
-          <div class="track-field">
-            <label for="track-length">長さ（m）</label>
-            <input id="track-length" type="number" inputmode="decimal" min="20" max="10000" step="1" value="500" aria-label="敷設する線路の長さ（メートル）">
-          </div>
-          <div class="track-field">
-            <label for="track-angle">角度（°）</label>
-            <input id="track-angle" type="number" inputmode="decimal" min="0" max="359.9" step="0.1" value="0" aria-label="線路の角度（度）">
-          </div>
         </div>
-        <button class="track-submit" id="build-track" type="button" disabled>この条件で複線を敷設</button>
+        <p class="track-note" id="track-destination">地図上の行き先をタップして、終点を決めてください。</p>
+        <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">角度は0°＝右、90°＝下、180°＝左、270°＝上。駅の線路端またはそこから延びる線路の先端に必ず接続します。</p>
+        <p class="track-note">長さ・角度・曲線は自動計算します。地図をドラッグすると移動、2本指で拡大縮小できます。急カーブや交差する線路は建設できません。</p>
       </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
@@ -338,8 +332,7 @@
       const stationDemand = document.querySelector('#station-demand');
       const trackEditor = document.querySelector('#track-editor');
       const trackOriginSelect = document.querySelector('#track-origin');
-      const trackLengthInput = document.querySelector('#track-length');
-      const trackAngleInput = document.querySelector('#track-angle');
+      const trackDestinationInfo = document.querySelector('#track-destination');
       const trackBuildButton = document.querySelector('#build-track');
       const trackValidation = document.querySelector('#track-validation');
       const demandOverview = document.querySelector('#demand-overview');
@@ -398,6 +391,7 @@
       const trackSections = [];
       let nextTrackSectionId = 1;
       let availableTrackOrigins = [];
+      let trackDestination = null;
       let mapMode = modeSelect.value;
       let selectedCars = Number(lengthSelect.value);
       let nextStationId = 1;
@@ -602,9 +596,18 @@
         const geometries = new Map();
         for (const section of trackSections.filter(section => section.mode === mapMode)) {
           const origin = resolveTrackOrigin(section.source, geometries);
-          if (origin) geometries.set(section.id, makeTrackGeometry(origin, section.lengthMeters, section.angle));
+          if (origin) {
+            const result = makeAutomaticTrack(origin, targetCanvasPoint(section.target));
+            if (result.geometry) geometries.set(section.id, result.geometry);
+          }
         }
         return geometries;
+      }
+
+      function targetCanvasPoint(target) {
+        return mapMode === 'kariya'
+          ? geoToCanvas(target.lon, target.lat)
+          : { x: target.xRatio * canvasSize.width, y: target.yRatio * canvasSize.height };
       }
 
       function resolveTrackOrigin(source, geometries) {
@@ -654,6 +657,46 @@
           endSpacing: mapMode === 'kariya' ? DOUBLE_TRACK_SPACING_METERS * origin.scale : BLANK_TRACK_SPACING };
       }
 
+      // 終点を選ぶだけで、始点から曲率0で出発し、終点でも曲率0になる曲線を作る。
+      // 対称な曲率遷移なら、始終点を結ぶ方位は始点と終点の接線方向の中間となる。
+      function makeAutomaticTrack(origin, target) {
+        const east = (target.x - origin.x) / origin.scale;
+        const south = (target.y - origin.y) / origin.scale;
+        const distanceMeters = Math.hypot(east, south);
+        if (distanceMeters < TRACK_MIN_LENGTH_METERS) {
+          return { error: `終点は接続元から${TRACK_MIN_LENGTH_METERS}m以上離してください` };
+        }
+        const bearing = normalDegrees(Math.atan2(south, east) * 180 / Math.PI);
+        const bearingTurn = angleDifference(bearing, origin.heading);
+        if (Math.abs(bearingTurn) > TRACK_MAX_TURN_DEGREES / 2) {
+          return { error: 'この方向へは急旋回が必要です。手前で線路を曲げるか、別の接続端を選んでください' };
+        }
+        const delta = 2 * bearingTurn * Math.PI / 180;
+        let projection = 0;
+        const sampleCount = 128;
+        for (let index = 0; index < sampleCount; index++) {
+          const t = (index + .5) / sampleCount;
+          const smoothed = t * t * (3 - 2 * t);
+          projection += Math.cos(delta * (smoothed - .5)) / sampleCount;
+        }
+        const lengthMeters = distanceMeters / projection;
+        if (lengthMeters > TRACK_MAX_LENGTH_METERS) {
+          return { error: `1区間は${TRACK_MAX_LENGTH_METERS.toLocaleString('ja-JP')}m以内にしてください` };
+        }
+        if (Math.abs(delta) > 1e-10 && lengthMeters / (1.5 * Math.abs(delta)) < TRACK_MIN_RADIUS_METERS + DOUBLE_TRACK_SPACING_METERS / 2) {
+          return { error: 'カーブが急すぎます（最小曲線半径160m）。もう少し遠くの終点を指定してください' };
+        }
+        if (origin.stationSource && lengthMeters < TRACK_STATION_TAPER_METERS) {
+          return { error: '駅からの最初の区間は120m以上必要です。終点をさらに遠くに置いてください' };
+        }
+        const geometry = makeTrackGeometry(origin, lengthMeters, normalDegrees(origin.heading + 2 * bearingTurn));
+        // 数値積分による誤差を最後の一点で補正し、指定した地点で厳密に止める。
+        const last = geometry.points[geometry.points.length - 1];
+        last.x = target.x;
+        last.y = target.y;
+        return { geometry, lengthMeters, finalHeading: last.heading };
+      }
+
       function trackSpacingAt(geometry, distance) {
         const taper = geometry.stationSource
           ? Math.min(1, distance / TRACK_STATION_TAPER_METERS) : 1;
@@ -683,6 +726,16 @@
           line.setAttribute('stroke-width', String((temporary ? 2.4 : 2) / zoom));
           group.append(line);
         }
+        if (temporary) {
+          const end = geometry.points[geometry.points.length - 1];
+          const marker = document.createElementNS(SVG_NS, 'circle');
+          marker.setAttribute('class', 'track-target');
+          marker.setAttribute('cx', String(end.x));
+          marker.setAttribute('cy', String(end.y));
+          marker.setAttribute('r', String(6 / zoom));
+          marker.setAttribute('stroke-width', String(2 / zoom));
+          group.append(marker);
+        }
         return group;
       }
 
@@ -701,24 +754,13 @@
           pointDistance(c, a, b), pointDistance(d, a, b));
       }
 
-      function validateTrack(source, lengthMeters, angle, geometries) {
+      function validateTrack(source, target, geometries) {
         const origin = resolveTrackOrigin(source, geometries);
         if (!origin) return { error: '駅につながる線路端を選択してください' };
-        if (!Number.isFinite(lengthMeters) || lengthMeters < TRACK_MIN_LENGTH_METERS || lengthMeters > TRACK_MAX_LENGTH_METERS) {
-          return { error: `長さは${TRACK_MIN_LENGTH_METERS}〜${TRACK_MAX_LENGTH_METERS}mで指定してください` };
-        }
-        if (!Number.isFinite(angle) || angle < 0 || angle >= 360) {
-          return { error: '角度は0〜359.9°で指定してください' };
-        }
-        const turn = Math.abs(angleDifference(angle, origin.heading));
-        if (turn > TRACK_MAX_TURN_DEGREES) return { error: '1区間で90°を超える方向転換はできません' };
-        if (turn && lengthMeters / (1.5 * turn * Math.PI / 180) < TRACK_MIN_RADIUS_METERS + DOUBLE_TRACK_SPACING_METERS / 2) {
-          return { error: '曲線が急すぎます。長さを延ばすか角度差を小さくしてください（最小曲線半径160m）' };
-        }
-        if (origin.stationSource && lengthMeters < TRACK_STATION_TAPER_METERS) {
-          return { error: '駅の12m幅から複線4m幅へ安全に移行するため、駅からの最初の区間は120m以上必要です' };
-        }
-        const candidate = makeTrackGeometry(origin, lengthMeters, angle);
+        if (!target) return { error: '地図上で行き先をタップしてください' };
+        const calculated = makeAutomaticTrack(origin, targetCanvasPoint(target));
+        if (calculated.error) return calculated;
+        const candidate = calculated.geometry;
         const existingSections = trackSections.filter(section => section.mode === mapMode);
         for (const section of existingSections) {
           const existing = geometries.get(section.id);
@@ -726,10 +768,19 @@
           const connectedParent = source.type === 'section' && source.sectionId === section.id;
           for (let i = 1; i < candidate.points.length; i++) {
             if (connectedParent && candidate.points[i].distance <= 25) continue;
+            const a = candidate.points[i - 1];
+            const b = candidate.points[i];
+            const clearance = TRACK_CLEARANCE_METERS * origin.scale;
             for (let j = 1; j < existing.points.length; j++) {
               if (connectedParent && existing.points[j - 1].distance >= existing.points[existing.points.length - 1].distance - 25) continue;
-              if (segmentDistance(candidate.points[i - 1], candidate.points[i], existing.points[j - 1], existing.points[j])
-                  < TRACK_CLEARANCE_METERS * origin.scale) {
+              const c = existing.points[j - 1];
+              const d = existing.points[j];
+              // 遠い線分は矩形の段階で除外し、スマホの長距離路線でも軽く判定する。
+              if (Math.max(Math.min(a.x, b.x), Math.min(c.x, d.x)) -
+                    Math.min(Math.max(a.x, b.x), Math.max(c.x, d.x)) >= clearance ||
+                  Math.max(Math.min(a.y, b.y), Math.min(c.y, d.y)) -
+                    Math.min(Math.max(a.y, b.y), Math.max(c.y, d.y)) >= clearance) continue;
+              if (segmentDistance(a, b, c, d) < clearance) {
                 return { error: '既存の線路との交差・接近・重複があるため敷設できません' };
               }
             }
@@ -754,7 +805,7 @@
             }
           }
         }
-        return { geometry: candidate };
+        return calculated;
       }
 
       function trackOriginKey(source) {
@@ -762,7 +813,6 @@
       }
 
       function syncTrackOrigins(preferredKey = trackOriginSelect.value) {
-        const previousKey = trackOriginSelect.value;
         const occupied = new Set(trackSections.filter(section => section.mode === mapMode)
           .map(section => trackOriginKey(section.source)));
         availableTrackOrigins = [];
@@ -789,13 +839,20 @@
         else if (availableTrackOrigins.length) trackOriginSelect.value = availableTrackOrigins[0].key;
         const origin = availableTrackOrigins.find(item => item.key === trackOriginSelect.value);
         trackBuildButton.disabled = !origin;
-        if (origin && origin.key !== previousKey) setTrackAngleFromOrigin(origin);
         renderTrackPreview();
       }
 
-      function setTrackAngleFromOrigin(origin) {
-        const resolved = resolveTrackOrigin(origin.source, currentTrackGeometry());
-        if (resolved) trackAngleInput.value = String(Math.round(normalDegrees(resolved.heading) * 10) / 10);
+      function selectTrackDestination(event) {
+        if (!layingTrack) return;
+        const point = rawPointerOnCanvas(event);
+        if (!point) return;
+        trackDestination = mapMode === 'kariya'
+          ? canvasToGeo(point.x, point.y)
+          : { xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height };
+        renderTrackPreview();
+        hint.textContent = trackBuildButton.disabled
+          ? 'ここには敷設できません。終点を別の場所にタップしてください'
+          : '自動生成した線路を確認し、敷設ボタンで確定してください';
       }
 
       function renderTrackPreview() {
@@ -806,12 +863,16 @@
           trackBuildButton.disabled = true;
           trackValidation.textContent = '先に1面2線の駅を配置してください';
           trackValidation.classList.toggle('invalid', true);
+          trackDestinationInfo.textContent = '駅の配置後、地図上の行き先をタップしてください。';
           return;
         }
-        const result = validateTrack(selected.source, Number(trackLengthInput.value), Number(trackAngleInput.value), currentTrackGeometry());
+        const result = validateTrack(selected.source, trackDestination, currentTrackGeometry());
         trackBuildButton.disabled = !!result.error;
-        trackValidation.textContent = result.error || '敷設できます（実線と破線のプレビューを確認してください）';
-        trackValidation.classList.toggle('invalid', !!result.error);
+        trackValidation.textContent = result.error || '敷設できます。青いプレビューを確認してください';
+        trackValidation.classList.toggle('invalid', !!result.error && !!trackDestination);
+        trackDestinationInfo.textContent = !trackDestination ? '地図上の行き先をタップして、終点を決めてください。'
+          : result.geometry ? `自動計算：延長 約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}m・滑らかな曲線で接続`
+            : '終点を選択中です。タップし直して変更できます。';
         if (!result.error) trackPreview.replaceChildren(createDoubleTrack(result.geometry, true));
       }
 
@@ -1311,6 +1372,7 @@
       button.addEventListener('click', () => {
         placing = !placing;
         layingTrack = false;
+        trackDestination = null;
         trackEditor.hidden = true;
         trackPreview.replaceChildren();
         trackButton.setAttribute('aria-pressed', 'false');
@@ -1333,43 +1395,34 @@
         preview.setAttribute('visibility', 'hidden');
         updateStationEditor();
         syncTrackOrigins();
-        if (layingTrack) {
-          const origin = availableTrackOrigins.find(item => item.key === trackOriginSelect.value);
-          if (origin) setTrackAngleFromOrigin(origin);
-          renderTrackPreview();
-        }
         hint.textContent = layingTrack
-          ? '接続する線路端・長さ・角度を指定して複線を敷設してください'
+          ? '接続する線路端を選び、地図上の行き先をタップしてください'
           : '「複線」で駅から線路を延ばせます';
       });
 
       trackOriginSelect.addEventListener('change', () => {
-        const origin = availableTrackOrigins.find(item => item.key === trackOriginSelect.value);
-        if (origin) setTrackAngleFromOrigin(origin);
+        trackDestination = null;
         renderTrackPreview();
       });
-      trackLengthInput.addEventListener('input', renderTrackPreview);
-      trackAngleInput.addEventListener('input', renderTrackPreview);
       trackBuildButton.addEventListener('click', () => {
         const selected = availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value);
         if (!selected) {
           hint.textContent = '先に1面2線の駅を配置してください';
           return;
         }
-        const lengthMeters = Number(trackLengthInput.value);
-        const angle = Number(trackAngleInput.value);
-        const result = validateTrack(selected.source, lengthMeters, angle, currentTrackGeometry());
+        const result = validateTrack(selected.source, trackDestination, currentTrackGeometry());
         if (result.error) {
           hint.textContent = result.error;
           renderTrackPreview();
           return;
         }
         const id = nextTrackSectionId++;
-        trackSections.push({ id, mode: mapMode, source: { ...selected.source }, lengthMeters, angle });
+        trackSections.push({ id, mode: mapMode, source: { ...selected.source }, target: { ...trackDestination } });
+        trackDestination = null;
         syncTrackOrigins(`section:${id}`);
         redrawPlaced();
         updateStationEditor();
-        hint.textContent = `複線${id}：${lengthMeters.toLocaleString('ja-JP')}mを敷設しました。続けて先端から延長できます`;
+        hint.textContent = `複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを自動敷設しました。次の行き先をタップして延長できます`;
       });
 
       lengthSelect.addEventListener('change', () => {
@@ -1384,6 +1437,7 @@
         stationDragStart = null;
         rotationDragStart = null;
         trackPreview.replaceChildren();
+        trackDestination = null;
         touches.clear();
         pendingTouchPlacement = null;
         fitCanvas();
@@ -1460,11 +1514,11 @@
         if (event.pointerType === 'touch') {
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
-          if (touches.size === 1 && hitGrip) {
+          if (!layingTrack && touches.size === 1 && hitGrip) {
             beginRotationDrag(event, hitGrip);
             pendingTouchPlacement = null;
             panStart = null;
-          } else if (touches.size === 1 && hitStation) {
+          } else if (!layingTrack && touches.size === 1 && hitStation) {
             beginStationDrag(event, hitStation);
             pendingTouchPlacement = null;
             panStart = null;
@@ -1472,7 +1526,7 @@
             stationDragStart = null;
             rotationDragStart = null;
             if (touches.size === 1) selectStation(null);
-            pendingTouchPlacement = touches.size === 1 && placing
+            pendingTouchPlacement = touches.size === 1 && (placing || layingTrack)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
             panStart = touches.size === 1 && (mapMode === 'kariya' || layingTrack)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
@@ -1484,7 +1538,10 @@
           return;
         }
         if (event.button !== 0) return;
-        if (hitGrip) {
+        if (layingTrack) {
+          mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
+          svg.setPointerCapture(event.pointerId);
+        } else if (hitGrip) {
           beginRotationDrag(event, hitGrip);
         } else if (hitStation) {
           beginStationDrag(event, hitStation);
@@ -1500,9 +1557,12 @@
       });
       svg.addEventListener('pointerup', event => {
         if (event.pointerType !== 'touch') {
+          const tappedDestination = layingTrack && mousePanStart &&
+            Math.hypot(event.clientX - mousePanStart.x, event.clientY - mousePanStart.y) <= TAP_SLOP;
           stationDragStart = null;
           rotationDragStart = null;
           mousePanStart = null;
+          if (tappedDestination) selectTrackDestination(event);
           return;
         }
         const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
@@ -1518,7 +1578,10 @@
         pinchStart = null;
         panStart = null;
         beginPinch();
-        if (tap) placeStation(event);
+        if (tap) {
+          if (layingTrack) selectTrackDestination(event);
+          else placeStation(event);
+        }
         event.preventDefault();
       });
       svg.addEventListener('pointercancel', event => {
