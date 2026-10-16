@@ -73,6 +73,7 @@
     .platform-inset { fill: none; stroke: #b6c0ca; }
     .platform-label { fill: #64758a; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
     .station-name-label { fill: #183f79; font-size: 15px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
+    .station-transfer-label { fill: #7644ac; font-size: 12px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: white; stroke-width: 3px; }
     .map-marker { stroke: #fff; stroke-width: 2.5; }
     .map-marker.jr { fill: #d47922; }
     .map-marker.meitetsu { fill: #ca3852; }
@@ -133,6 +134,8 @@
     .editor-name label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-name input { flex: 1; min-width: 0; min-height: 38px; padding: 7px 10px; border: 1px solid #cbd8eb; border-radius: 8px; background: #fff; color: #203047; font: inherit; font-size: 16px; }
     .editor-name input:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
+    .station-interchange { margin: -1px 0 9px; color: #7644ac; font-size: 12px; font-weight: 750; }
+    .station-interchange[hidden] { display: none; }
     .editor-rotation { display: flex; align-items: center; gap: 8px; }
     .editor-rotation label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
@@ -262,13 +265,14 @@
       </svg>
       <div class="map-data" id="map-data">
         <details>
-          <summary>刈谷市 <span aria-hidden="true">·</span> 人口153,200人</summary>
+          <summary>刈谷市153,200人・知立市72,861人</summary>
           <div class="map-data-body">
             <p><strong>人口：</strong>153,200人／71,228世帯（2026年10月1日・住民基本台帳）</p>
+            <p><strong>知立市人口：</strong>72,861人／34,917世帯（2026年10月1日・住民基本台帳）</p>
             <p><strong>商業：</strong>卸売・小売業960事業所、うち小売698事業所（2021年経済センサス）</p>
-            <p><strong>既存鉄道：</strong>JR東海道本線、名鉄名古屋本線・三河線の3路線、8駅</p>
+            <p><strong>既存鉄道：</strong>JR東海道本線、名鉄名古屋本線・三河線の3路線。刈谷市8駅＋知立市4駅を表示。</p>
             <p><strong>2024年度：</strong>JR刈谷駅乗車1,058.6万人／名鉄刈谷駅乗降866.9万人。計数方法が異なるため単純比較不可。</p>
-            <p>駅はJR＝橙・名鉄＝赤・乗換＝紫、主要商業拠点＝緑、工業拠点＝青で表示します。</p>
+            <p>既存駅はJR＝橙・名鉄＝赤・乗換＝紫、主要商業拠点＝緑、工業拠点＝青で表示します。新設駅の中心から既存駅250m以内なら他社線との乗換設定を確認します。承認した駅だけ「乗換」表示になります（駅間の直線距離を使ったゲーム上の仮判定）。</p>
             <p><strong>駅別利用者数（2024年度、千人）</strong></p>
             <table aria-label="刈谷市の駅別利用者数">
               <thead><tr><th>会社</th><th>駅</th><th>人数</th></tr></thead>
@@ -286,9 +290,9 @@
             </table>
             <p><strong>掲載商業拠点：</strong>みなくる刈谷／アピタ刈谷店／ルビットタウン刈谷／イオンタウン刈谷／刈谷ハイウェイオアシス</p>
             <p><strong>掲載工業拠点：</strong>デンソー本社／豊田自動織機 本社・刈谷工場／デンソー高棚製作所</p>
-            <p>全店舗・全事業所を表示したものではありません。駅の集客人口には国土交通省の250m人口メッシュ（2020年国勢調査ベース、2025年推計）を使用。2026年の住民基本台帳人口とは集計基準が異なります。</p>
+            <p>全店舗・全事業所を表示したものではありません。刈谷市・知立市両市の駅の集客人口には国土交通省の250m人口メッシュ（2020年国勢調査ベース、2025年推計）を使用。2026年の住民基本台帳人口とは集計基準が異なります。</p>
             <p><strong>徒歩集客ルール：</strong>駅から0〜400mは係数100%、400〜600mは65%、600〜800mは30%。800m超は対象外。250mメッシュを細分化して計算し、重なる場合は最寄りの設置駅に一度だけ配分します。数値は実際の乗車人数ではなく、距離で補正した潜在利用者人口です。</p>
-            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">人口（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計（市公式）</a> · <a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-mesh250r6.html" target="_blank" rel="noopener noreferrer">250m人口メッシュ（国交省）</a></p>
+            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">刈谷市人口</a> · <a href="https://www.city.chiryu.aichi.jp/shisei/tokei/1/toukeir8/20290.html" target="_blank" rel="noopener noreferrer">知立市人口</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（刈谷市）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計</a> · <a href="https://nlftp.mlit.go.jp/ksj/gml/datalist/KsjTmplt-mesh250r6.html" target="_blank" rel="noopener noreferrer">250m人口メッシュ（国交省）</a></p>
           </div>
         </details>
         <div id="demand-overview" class="demand-overview" role="status" aria-live="polite">徒歩集客圏：人口データを読み込み中…</div>
@@ -306,6 +310,7 @@
           <label for="station-name">駅名</label>
           <input id="station-name" type="text" maxlength="24" autocomplete="off" placeholder="例：刈谷中央" aria-label="駅名">
         </div>
+        <div id="station-interchange" class="station-interchange" hidden></div>
         <div class="editor-rotation">
           <label for="station-angle">角度</label>
           <input id="station-angle" type="range" min="0" max="359.9" step="0.1" value="90" aria-label="駅の回転角度">
@@ -333,6 +338,16 @@
           <div class="connection-actions">
             <button id="connection-cancel" type="button">キャンセル</button>
             <button id="connection-confirm" class="confirm" type="button">接続する</button>
+          </div>
+        </div>
+      </div>
+      <div id="interchange-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="interchange-question" hidden>
+        <div class="connection-panel">
+          <h2 id="interchange-question"></h2>
+          <p id="interchange-detail"></p>
+          <div class="connection-actions">
+            <button id="interchange-cancel" type="button">接続しない</button>
+            <button id="interchange-confirm" class="confirm" type="button">接続する</button>
           </div>
         </div>
       </div>
@@ -364,6 +379,7 @@
       const stationEditor = document.querySelector('#station-editor');
       const stationInfo = document.querySelector('#selected-station-info');
       const stationNameInput = document.querySelector('#station-name');
+      const stationInterchange = document.querySelector('#station-interchange');
       const stationAngle = document.querySelector('#station-angle');
       const stationAngleValue = document.querySelector('#station-angle-value');
       const stationDemand = document.querySelector('#station-demand');
@@ -377,6 +393,11 @@
       const connectionDetail = document.querySelector('#connection-detail');
       const connectionConfirm = document.querySelector('#connection-confirm');
       const connectionCancel = document.querySelector('#connection-cancel');
+      const interchangeDialog = document.querySelector('#interchange-dialog');
+      const interchangeQuestion = document.querySelector('#interchange-question');
+      const interchangeDetail = document.querySelector('#interchange-detail');
+      const interchangeConfirm = document.querySelector('#interchange-confirm');
+      const interchangeCancel = document.querySelector('#interchange-cancel');
       const demandOverview = document.querySelector('#demand-overview');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
@@ -399,6 +420,7 @@
       const TRACK_SAMPLE_METERS = 10;
       const DEFAULT_STATION_ROTATION = 90;
       const WALK_CATCHMENT_METERS = 800;
+      const INTERCHANGE_RADIUS_METERS = 250;
       const WALK_CATCHMENT_SQUARED = WALK_CATCHMENT_METERS ** 2;
       const POPULATION_SAMPLES_PER_SIDE = 4;
       const MAP_CENTER = { lat: 35.004, lon: 137.012 };
@@ -414,7 +436,12 @@
         { name: '富士松', lat: 35.02945, lon: 137.01662, kind: 'meitetsu', meitetsuTraffic: 1208000 },
         { name: '一ツ木', lat: 35.01382, lon: 137.02541, kind: 'meitetsu', meitetsuTraffic: 1324000 },
         { name: '刈谷市', lat: 34.98481, lon: 136.99366, kind: 'meitetsu', meitetsuTraffic: 2011000 },
-        { name: '小垣江', lat: 34.96375, lon: 136.99538, kind: 'meitetsu', meitetsuTraffic: 1297000 }
+        { name: '小垣江', lat: 34.96375, lon: 136.99538, kind: 'meitetsu', meitetsuTraffic: 1297000 },
+        // 知立市内の4駅。三河知立は2024年3月移設後の現在地。
+        { name: '知立', lat: 35.00611, lon: 137.03972, kind: 'interchange', operator: '名鉄', lines: '名古屋本線・三河線' },
+        { name: '三河知立', lat: 35.005722, lon: 137.054972, kind: 'meitetsu', operator: '名鉄', lines: '三河線' },
+        { name: '牛田', lat: 34.999252, lon: 137.060857, kind: 'meitetsu', operator: '名鉄', lines: '名古屋本線' },
+        { name: '重原', lat: 34.995, lon: 137.024111, kind: 'meitetsu', operator: '名鉄', lines: '三河線' }
       ];
       // 商業の代表施設（全店ではない）。施設位置は公開地図と各施設の案内に基づく。
       const commerceSites = [
@@ -456,6 +483,7 @@
       let calculatedDemandRevision = -1;
       let demandByStation = new Map();
       let totalWeightedDemand = 0;
+      let pendingInterchange = null;
 
       // 配布用の250mメッシュを約62.5m間隔で標本化する。
       // 面積の一部分だけが800m圏内にかかる場合も、人口を丸ごと算入しない。
@@ -577,12 +605,16 @@
 
       function loadPopulationData() {
         if (typeof fetch !== 'function') return;
-        fetch('./population-kariya-2025.json').then(response => {
-          if (!response.ok) throw new Error(`人口データ HTTP ${response.status}`);
-          return response.json();
-        }).then(data => {
-          if (!Array.isArray(data.cells) || data.populationYear !== 2025) throw new Error('人口データ形式が不正');
-          populationSamples = preparePopulationSamples(data.cells);
+        Promise.all(['./population-kariya-2025.json', './population-chiryu-2025.json'].map(url =>
+          fetch(url).then(response => {
+            if (!response.ok) throw new Error(`人口データ HTTP ${response.status}`);
+            return response.json();
+          })
+        )).then(datasets => {
+          for (const data of datasets) {
+            if (!Array.isArray(data.cells) || data.populationYear !== 2025) throw new Error('人口データ形式が不正');
+          }
+          populationSamples = preparePopulationSamples(datasets.flatMap(data => data.cells));
           populationState = 'ready';
           demandRevision++;
           renderDemandInfo();
@@ -1214,7 +1246,8 @@
       function createStation(x, y, carCount, city = false, latitude = MAP_CENTER.lat, rotation = DEFAULT_STATION_ROTATION, stationId = null, name = '', level = currentLevel) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
-        group.setAttribute('aria-label', `${name ? `${name}／` : ''}${floorLabel(level)}／1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）`);
+        const interchange = stationId === null ? null : positions.find(position => position.id === stationId)?.interchange;
+        group.setAttribute('aria-label', `${name ? `${name}／` : ''}${floorLabel(level)}／1面2線 ${carCount}両対応（ホーム長${carCount * CAR_LENGTH_METERS}m）${interchange ? `／${interchange.operator}${interchange.name}駅と乗換` : ''}`);
         if (stationId !== null) {
           group.setAttribute('data-station-id', String(stationId));
           group.setAttribute('class', `station-item${stationId === selectedStationId ? ' selected' : ''}`);
@@ -1287,6 +1320,14 @@
           stationNameLabel.textContent = name;
           group.append(stationNameLabel);
         }
+        if (interchange) {
+          const zoom = canvasSize.width / view.width;
+          const badge = document.createElementNS(SVG_NS, 'text');
+          badge.setAttribute('class', 'station-transfer-label');
+          badge.setAttribute('transform', city ? `translate(0 ${-58 / zoom}) scale(${1 / zoom})` : 'translate(0 -76)');
+          badge.textContent = `⇄ ${interchange.name}駅へ乗換`;
+          group.append(badge);
+        }
         if (stationId !== null && stationId === selectedStationId && !layingTrack) {
           const zoom = canvasSize.width / view.width;
           const radians = rotation * Math.PI / 180;
@@ -1335,6 +1376,10 @@
         const connected = stationHasRailConnection(position.id);
         stationInfo.textContent = `${floorLabel(position.level)}・1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）${connected ? '・線路接続済み（位置固定）' : ''}`;
         stationNameInput.value = position.name;
+        stationInterchange.hidden = !position.interchange;
+        stationInterchange.textContent = position.interchange
+          ? `⇄ 乗換駅：${position.interchange.operator} ${position.interchange.name}駅（直線約${position.interchange.distanceMeters}m）`
+          : '';
         stationAngle.value = String(position.rotation);
         stationAngle.disabled = connected;
         stationAngleValue.textContent = `${position.rotation.toFixed(1)}°`;
@@ -1546,6 +1591,56 @@
         });
       }
 
+      function geoDistanceMeters(a, b) {
+        return Math.hypot((a.lon - b.lon) * METERS_PER_DEGREE_LON,
+          (a.lat - b.lat) * METERS_PER_DEGREE);
+      }
+
+      function nearestOtherRailStation(position) {
+        if (position.mode !== 'kariya') return null;
+        let nearest = null;
+        for (const site of railStations) {
+          const distance = geoDistanceMeters(position, site);
+          if (distance <= INTERCHANGE_RADIUS_METERS && (!nearest || distance < nearest.distance)) {
+            nearest = { site, distance };
+          }
+        }
+        return nearest;
+      }
+
+      function hideInterchangeDialog() {
+        interchangeDialog.hidden = true;
+        pendingInterchange = null;
+      }
+
+      function maybeOfferInterchange(position) {
+        const nearest = nearestOtherRailStation(position);
+        if (!nearest) return;
+        const { site, distance } = nearest;
+        const operator = site.operator || (site.kind === 'jr' ? 'JR東海' : site.kind === 'interchange' ? 'JR東海・名鉄' : '名鉄');
+        const lines = site.lines || (site.kind === 'jr' ? '東海道本線' : site.kind === 'interchange' ? '東海道本線・三河線' : '名古屋本線・三河線');
+        pendingInterchange = { positionId: position.id, name: site.name, operator, lines, distanceMeters: Math.round(distance) };
+        interchangeQuestion.textContent = `${site.name}駅（${operator}）に接続しますか？`;
+        interchangeDetail.textContent = `${position.name}から約${Math.round(distance)}m（直線距離）。${lines}への乗換駅として登録しますか？ 地下通路や改札の接続はゲーム上の設定です。`;
+        interchangeDialog.hidden = false;
+        interchangeCancel.focus?.();
+      }
+
+      function finishStationMove() {
+        if (!stationDragStart || mapMode !== 'kariya') return;
+        const position = positions.find(item => item.id === stationDragStart.id);
+        if (!position || geoDistanceMeters(position, stationDragStart.original) < 1) return;
+        const nearest = nearestOtherRailStation(position);
+        if (position.interchange && nearest?.site.name === position.interchange.name) {
+          position.interchange.distanceMeters = Math.round(nearest.distance);
+        } else {
+          position.interchange = null;
+          if (nearest) maybeOfferInterchange(position);
+        }
+        updateStationEditor();
+        redrawPlaced();
+      }
+
       function placeStation(event) {
         if (!placing) return;
         const point = pointerOnCanvas(event);
@@ -1560,6 +1655,7 @@
         syncTrackOrigins();
         hint.textContent = `${floorLabel()}：1面2線（${selectedCars}両・${selectedCars * CAR_LENGTH_METERS}m）を${positions.filter(isOnCurrentLevel).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
+        if (mapMode === 'kariya') maybeOfferInterchange(position);
       }
 
       function redrawPlaced() {
@@ -1684,8 +1780,27 @@
       trackBuildButton.addEventListener('click', () => trackTargetStation ? openConnectionDialog() : buildTrack());
       connectionConfirm.addEventListener('click', buildTrack);
       connectionCancel.addEventListener('click', () => { connectionDialog.hidden = true; });
+      interchangeConfirm.addEventListener('click', () => {
+        if (!pendingInterchange) return;
+        const position = positions.find(item => item.id === pendingInterchange.positionId);
+        if (position) {
+          const nearest = nearestOtherRailStation(position);
+          if (nearest && nearest.site.name === pendingInterchange.name) {
+            position.interchange = { name: pendingInterchange.name, operator: pendingInterchange.operator,
+              lines: pendingInterchange.lines, distanceMeters: Math.round(nearest.distance) };
+            hint.textContent = `${position.name}を${position.interchange.operator} ${position.interchange.name}駅との乗換駅にしました`;
+          }
+        }
+        hideInterchangeDialog();
+        updateStationEditor();
+        redrawPlaced();
+      });
+      interchangeCancel.addEventListener('click', hideInterchangeDialog);
       window.addEventListener('keydown', event => {
-        if (event.key === 'Escape') connectionDialog.hidden = true;
+        if (event.key === 'Escape') {
+          connectionDialog.hidden = true;
+          hideInterchangeDialog();
+        }
       });
 
       lengthSelect.addEventListener('change', () => {
@@ -1703,6 +1818,7 @@
         trackDestination = null;
         trackTargetStation = null;
         connectionDialog.hidden = true;
+        hideInterchangeDialog();
         touches.clear();
         pendingTouchPlacement = null;
         fitCanvas();
@@ -1723,6 +1839,7 @@
         trackDestination = null;
         trackTargetStation = null;
         connectionDialog.hidden = true;
+        hideInterchangeDialog();
         preview.setAttribute('visibility', 'hidden');
         redrawPlaced();
         syncTrackOrigins();
@@ -1844,6 +1961,7 @@
         if (event.pointerType !== 'touch') {
           const tappedDestination = layingTrack && mousePanStart &&
             Math.hypot(event.clientX - mousePanStart.x, event.clientY - mousePanStart.y) <= TAP_SLOP;
+          if (stationDragStart?.pointerId === event.pointerId) finishStationMove();
           stationDragStart = null;
           rotationDragStart = null;
           mousePanStart = null;
@@ -1857,6 +1975,7 @@
           Math.hypot(event.clientX - pendingTouchPlacement.x,
             event.clientY - pendingTouchPlacement.y) <= TAP_SLOP;
         touches.delete(event.pointerId);
+        if (finishedStationDrag) finishStationMove();
         if (finishedStationDrag) stationDragStart = null;
         if (finishedRotationDrag) rotationDragStart = null;
         pendingTouchPlacement = null;

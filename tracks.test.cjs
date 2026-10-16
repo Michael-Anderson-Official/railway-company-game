@@ -45,10 +45,11 @@ const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
   '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
-  '#station-name', '#station-angle', '#station-angle-value', '#station-demand',
+  '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
   '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
-  '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel'
+  '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel',
+  '#interchange-dialog', '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'
 ];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
