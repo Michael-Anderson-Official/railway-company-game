@@ -43,11 +43,12 @@ class Element {
 
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
-  '#placed', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count',
+  '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
-  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation'
+  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
+  '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel'
 ];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
@@ -125,6 +126,9 @@ nodes['#place-tool'].dispatch('click');
 mouse('pointerdown', 200, 300);
 mouse('pointerup', 200, 300);
 assert.equal(nodes['#placed'].children.length, 1);
+assert.equal(nodes['#placed'].children[0].children[0].attributes.transform, 'rotate(90)', 'new stations start vertically');
+nodes['#station-angle'].value = '0'; // The original free-end test uses an explicitly horizontal station.
+nodes['#station-angle'].dispatch('input');
 nodes['#track-tool'].dispatch('click');
 assert.equal(nodes['#track-editor'].hidden, false);
 assert.equal(nodes['#track-origin'].children.length, 2);
@@ -137,7 +141,7 @@ const stationCenter = nodes['#placed'].children[0].attributes.transform.match(/t
 const leftEnd = { x: Number(stationCenter[1]) - 120 * expectedMetersToSvg, y: Number(stationCenter[2]) };
 
 // A tap on the opposite side of a station automatically chooses the usable open end.
-tapTarget(Number(stationCenter[1]) + 900 * expectedMetersToSvg, leftEnd.y);
+tapTarget(Number(stationCenter[1]) + 1500 * expectedMetersToSvg, leftEnd.y);
 assert.equal(nodes['#track-origin'].value, 'station:1:1');
 assert.equal(nodes['#build-track'].disabled, false);
 nodes['#track-origin'].value = 'station:1:-1';
@@ -145,20 +149,24 @@ nodes['#track-origin'].dispatch('change');
 assert.equal(nodes['#build-track'].disabled, true);
 
 // An automatic curve of 160m with a 30-degree bearing change is too sharp.
+for (let i = 0; i < 2; i++) nodes['#zoom-in'].dispatch('click');
 tapTarget(leftEnd.x - 160 * Math.cos(Math.PI / 6) * expectedMetersToSvg,
   leftEnd.y - 160 * Math.sin(Math.PI / 6) * expectedMetersToSvg);
 assert.equal(nodes['#build-track'].disabled, true);
 assert.match(nodes['#track-validation'].textContent, /最小曲線半径160m/);
 commit();
 assert.equal(routes().length, 0);
+for (let i = 0; i < 2; i++) nodes['#zoom-out'].dispatch('click');
 
 // A map tap computes the route, displays a two-track preview and builds exactly to the tap.
 const chosenEnd = { x: leftEnd.x - 600 * expectedMetersToSvg, y: leftEnd.y };
+for (let i = 0; i < 2; i++) nodes['#zoom-in'].dispatch('click');
 tapTarget(chosenEnd.x, chosenEnd.y, 13);
 assert.equal(nodes['#build-track'].disabled, false);
 assert.equal(preview().length, 1);
 assert.equal(preview()[0].children.length, 3, 'two rails and the target marker');
 assert.match(nodes['#track-destination'].textContent, /約600m/);
+for (let i = 0; i < 2; i++) nodes['#zoom-out'].dispatch('click');
 commit();
 assert.equal(routes().length, 1);
 assert.equal(routes()[0].children.length, 2);
@@ -236,6 +244,8 @@ assert.equal(nodes['#build-track'].disabled, true);
 nodes['#place-tool'].dispatch('click');
 mouse('pointerdown', 200, 200);
 mouse('pointerup', 200, 200);
+nodes['#station-angle'].value = '0';
+nodes['#station-angle'].dispatch('input');
 nodes['#track-tool'].dispatch('click');
 const blankCenter = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
 const blankEnd = { x: Number(blankCenter[1]) - 164, y: Number(blankCenter[2]) };
@@ -269,6 +279,8 @@ nodes['#place-tool'].dispatch('click');
 mouseTap(200, 300);
 assert.equal(nodes['#placed'].children.length, 1);
 assert.match(nodes['#placed'].children[0].attributes['aria-label'], /地下2階（-20m）/);
+nodes['#station-angle'].value = '0';
+nodes['#station-angle'].dispatch('input');
 nodes['#track-tool'].dispatch('click');
 assert.equal(nodes['#track-origin'].children.length, 2, 'B2 offers only B2 station endpoints');
 const b2Center = nodes['#placed'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
@@ -294,4 +306,70 @@ for (const floor of ['-3', '-4', '-5', '0']) {
 assert.match(html, /<option value="-5">地下5階（−50m）<\/option>/);
 assert.match(html, /\.map-tiles \{ opacity: \.62; \}/);
 
-console.log('Automatic tracks, safety, mobile gestures, map and six-floor isolation OK');
+// Station-end taps automatically choose the exact terminal and require confirmation.
+nodes['#floor-level'].value = '-3';
+nodes['#floor-level'].dispatch('change');
+nodes['#place-tool'].dispatch('click');
+mouseTap(200, 160);
+mouseTap(200, 420);
+assert.equal(nodes['#placed'].children.length, 2);
+assert.ok(nodes['#placed'].children.every(station => station.children[0].attributes.transform === 'rotate(90)'));
+const stationTargetName = nodes['#placed'].children[1].attributes['aria-label'].split('／')[0];
+nodes['#track-tool'].dispatch('click');
+assert.equal(nodes['#station-endpoints'].children.length, 4);
+assert.match(nodes['#track-origin'].children[0].textContent, /上り側/);
+assert.match(nodes['#track-origin'].children[1].textContent, /下り側/);
+const targetMarker = nodes['#station-endpoints'].children[2].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+const targetPoint = { x: Number(targetMarker[1]), y: Number(targetMarker[2]) };
+nodes['#track-origin'].value = `station:${nodes['#placed'].children[0].getAttribute('data-station-id')}:1`;
+tapTarget(targetPoint.x, targetPoint.y, 31);
+assert.equal(nodes['#connection-dialog'].hidden, false);
+assert.equal(nodes['#connection-question'].textContent, `${stationTargetName}の上り側に接続しますか？`);
+assert.equal(nodes['#build-track'].disabled, false);
+assert.equal(preview().length, 1);
+nodes['#connection-cancel'].dispatch('click');
+assert.equal(nodes['#connection-dialog'].hidden, true);
+assert.equal(routes().length, 0, 'cancel must not build rails');
+tapTarget(targetPoint.x, targetPoint.y, 32);
+nodes['#connection-confirm'].dispatch('click');
+assert.equal(nodes['#connection-dialog'].hidden, true);
+assert.equal(routes().length, 1);
+assert.ok(Math.abs(endpointGap(routes()[0]) - 12 * expectedMetersToSvg) < .005, 'source joins 12m spaced station rails');
+assert.ok(Math.abs(endpointGap(routes()[0], true) - 12 * expectedMetersToSvg) < .005, 'destination joins 12m spaced station rails');
+const destinationCenterMatch = nodes['#placed'].children[1].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+const actualStationEntry = { x: Number(destinationCenterMatch[1]), y: Number(destinationCenterMatch[2]) - 120 * expectedMetersToSvg };
+assert.ok(Math.hypot(terminalCenter(routes()[0]).x - actualStationEntry.x,
+  terminalCenter(routes()[0]).y - actualStationEntry.y) < .01, 'both tracks terminate precisely at the target station entrance');
+assert.equal(nodes['#track-origin'].children.length, 2, 'both ends connected and route tip is closed');
+assert.equal(nodes['#station-endpoints'].children[2].children[0].attributes.class, 'station-endpoint occupied');
+assert.equal(nodes['#build-track'].disabled, true);
+tapTarget(targetPoint.x, targetPoint.y, 33);
+assert.equal(nodes['#connection-dialog'].hidden, true, 'already occupied target cannot be confirmed again');
+assert.match(nodes['#track-validation'].textContent, /既に線路が接続/);
+
+nodes['#floor-level'].value = '-4';
+nodes['#floor-level'].dispatch('change');
+assert.equal(routes().length, 0, 'a connection on B3 never appears on B4');
+
+// Offset stations produce a curved route while joining both station tangents.
+nodes['#place-tool'].dispatch('click');
+mouseTap(155, 170);
+mouseTap(245, 420);
+nodes['#track-tool'].dispatch('click');
+nodes['#track-origin'].value = `station:${nodes['#placed'].children[0].getAttribute('data-station-id')}:1`;
+const offsetMarker = nodes['#station-endpoints'].children[2].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+tapTarget(Number(offsetMarker[1]), Number(offsetMarker[2]));
+assert.equal(nodes['#connection-dialog'].hidden, false, nodes['#track-validation'].textContent);
+nodes['#connection-confirm'].dispatch('click');
+assert.equal(routes().length, 1);
+const railA = pathPoints(routes()[0].children[0].attributes.d);
+const railB = pathPoints(routes()[0].children[1].attributes.d);
+const mid = index => ({ x: (railA[index].x + railB[index].x) / 2, y: (railA[index].y + railB[index].y) / 2 });
+const beginning = mid(0);
+const ending = mid(railA.length - 1);
+assert.ok(Math.abs(ending.x - beginning.x) > 40, 'the curve reaches the laterally offset station');
+assert.ok(Math.abs(mid(1).x - beginning.x) < .05, 'the route leaves the origin on its vertical tangent');
+assert.ok(Math.abs(mid(railA.length - 2).x - ending.x) < .05, 'the route enters the destination on its vertical tangent');
+assert.ok(Math.abs(endpointGap(routes()[0], true) - 12 * expectedMetersToSvg) < .005);
+
+console.log('Automatic tracks, station-end connection confirmation, safety, mobile gestures, map and six-floor isolation OK');

@@ -40,11 +40,12 @@ class Element {
 }
 
 const nodes = Object.fromEntries([
-  '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#preview',
+  '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed', '#station-endpoints', '#preview',
   '#place-tool', '#track-tool', '#map-mode', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
-  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation'
+  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
+  '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel'
 ].map(key => [key, new Element()]));
 const board = nodes['#board'];
 nodes['#map-mode'].value = 'kariya';
