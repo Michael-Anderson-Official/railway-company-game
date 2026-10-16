@@ -20,18 +20,19 @@
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       padding: 15px 24px; background: #fff; border-bottom: 1px solid #e6eaf0;
     }
-    h1 { margin: 0; font-size: 15px; font-weight: 750; letter-spacing: .02em; }
+    .header > div:first-child { flex-shrink: 0; }
+    h1 { margin: 0; font-size: 15px; font-weight: 750; letter-spacing: .02em; white-space: nowrap; }
     .subtitle { margin: 4px 0 0; color: #798493; font-size: 11px; }
     .tool {
       display: flex; align-items: center; gap: 11px;
       border: 1px solid #e3e9f0; border-radius: 12px; background: #fff;
-      padding: 7px 11px 7px 7px;
+      padding: 7px 11px 7px 7px; min-width: 0;
     }
     .tool button {
       display: inline-flex; gap: 9px; align-items: center; justify-content: center;
       padding: 9px 13px; border: 1px solid #d5dee7; border-radius: 8px;
       background: #fff; color: #203047; font: inherit; font-size: 12px;
-      font-weight: 700; cursor: pointer;
+      font-weight: 700; cursor: pointer; white-space: nowrap;
     }
     .tool button[aria-pressed="true"] {
       color: #fff; background: #2d5aa7; border-color: #2d5aa7;
@@ -46,7 +47,7 @@
       background: #fff; color: #203047; font: inherit; font-size: 13px;
     }
     .length-control select:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
-    .tool-hint { white-space: nowrap; font-size: 11px; color: #798493; }
+    .tool-hint { flex: 1 1 120px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: #798493; }
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
     #board { display: block; width: 100%; height: 100%; touch-action: none; }
     #board.placing { cursor: crosshair; }
@@ -163,7 +164,7 @@
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
       .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
-      .tool-hint { flex-basis: 100%; white-space: normal; }
+      .tool-hint { flex-basis: 100%; white-space: normal; overflow: visible; }
       .hint { bottom: 14px; left: 14px; font-size: 11px; }
       .map-data { top: 10px; left: 10px; }
       .zoom-controls { top: 10px; right: 10px; }
