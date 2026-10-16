@@ -71,6 +71,11 @@
     .station-item.selected .platform { fill: #dce9ff; stroke: #2158a3; }
     .station-item.selected .platform-label, .station-item.selected .map-label { fill: #174c97; }
     .station-hit { fill: transparent; stroke: none; pointer-events: all; }
+    .rotation-guide { stroke: #7451ba; pointer-events: none; }
+    .rotation-grip { cursor: grab; }
+    .rotation-grip .rotation-touch { fill: transparent; stroke: none; pointer-events: all; }
+    .rotation-grip .rotation-knob { fill: #7451ba; stroke: #fff; stroke-width: 2.5; pointer-events: none; }
+    .rotation-grip .rotation-symbol { fill: #fff; font-size: 23px; font-weight: 700; text-anchor: middle; dominant-baseline: central; pointer-events: none; }
     .preview { opacity: .42; pointer-events: none; }
     .hint {
       position: absolute; bottom: 20px; left: 24px; pointer-events: none;
@@ -106,15 +111,10 @@
       width: 32px; height: 32px; cursor: pointer;
     }
     .editor-rotation { display: flex; align-items: center; gap: 8px; }
-    .editor-rotation button {
-      flex: none; min-width: 56px; min-height: 42px; border: 1px solid #cbd8eb;
-      border-radius: 8px; background: #eef4ff; color: #2158a3;
-      font: inherit; font-size: 13px; font-weight: 750; cursor: pointer;
-    }
+    .editor-rotation label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
-    .editor-rotation output { min-width: 35px; font-size: 12px; color: #203047; font-variant-numeric: tabular-nums; text-align: right; }
-    .editor-rotation button:focus-visible, .editor-heading button:focus-visible { outline: 3px solid #86b3ff; }
-    .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+    .editor-rotation output { min-width: 43px; font-size: 12px; color: #203047; font-variant-numeric: tabular-nums; text-align: right; }
+    .editor-heading button:focus-visible { outline: 3px solid #86b3ff; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
       .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
@@ -170,7 +170,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">タップで配置・置いた駅はドラッグで移動／選択して回転・2本指で拡大縮小</span>
+        <span class="tool-hint">タップで配置・駅本体をドラッグで移動・紫の↻をドラッグで自由回転</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -217,15 +217,13 @@
       </div>
       <div class="station-editor" id="station-editor" hidden>
         <div class="editor-heading">
-          <div><strong id="selected-station-info">1面2線</strong><span>ドラッグで移動・角度で回転</span></div>
+          <div><strong id="selected-station-info">1面2線</strong><span>駅本体をドラッグで移動・紫の↻で自由回転</span></div>
           <button id="deselect-station" type="button" aria-label="駅の選択を解除">×</button>
         </div>
         <div class="editor-rotation">
-          <button id="rotate-left" type="button" aria-label="駅を反時計回りに15度回転">↶15°</button>
-          <label class="visually-hidden" for="station-angle">駅の回転角度</label>
-          <input id="station-angle" type="range" min="0" max="359" step="1" value="0" aria-label="駅の回転角度">
-          <output id="station-angle-value" for="station-angle">0°</output>
-          <button id="rotate-right" type="button" aria-label="駅を時計回りに15度回転">15°↷</button>
+          <label for="station-angle">角度</label>
+          <input id="station-angle" type="range" min="0" max="359.9" step="0.1" value="0" aria-label="駅の回転角度">
+          <output id="station-angle-value" for="station-angle">0.0°</output>
         </div>
       </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
@@ -291,6 +289,7 @@
       let nextStationId = 1;
       let selectedStationId = null;
       let stationDragStart = null;
+      let rotationDragStart = null;
       let canvasSize = { width: 1440, height: 820 };
       let view = { x: 0, y: 0, width: 1440, height: 820 };
       let pendingTouchPlacement = null;
@@ -483,6 +482,40 @@
         }
         group.append(diagram);
         group.append(label);
+        if (stationId !== null && stationId === selectedStationId) {
+          const zoom = canvasSize.width / view.width;
+          const radians = rotation * Math.PI / 180;
+          const handleX = Math.cos(radians) * 60 / zoom;
+          const handleY = Math.sin(radians) * 60 / zoom;
+          const guide = document.createElementNS(SVG_NS, 'line');
+          guide.setAttribute('class', 'rotation-guide');
+          guide.setAttribute('x1', '0');
+          guide.setAttribute('y1', '0');
+          guide.setAttribute('x2', String(handleX));
+          guide.setAttribute('y2', String(handleY));
+          guide.setAttribute('stroke-width', String(1.5 / zoom));
+          guide.setAttribute('stroke-dasharray', `${4 / zoom} ${3 / zoom}`);
+          group.append(guide);
+
+          const grip = document.createElementNS(SVG_NS, 'g');
+          grip.setAttribute('class', 'rotation-grip');
+          grip.setAttribute('data-rotate-station-id', String(stationId));
+          grip.setAttribute('aria-label', 'ドラッグして駅を自由に回転');
+          grip.setAttribute('transform', `translate(${handleX} ${handleY}) scale(${1 / zoom})`);
+          const touchCircle = document.createElementNS(SVG_NS, 'circle');
+          touchCircle.setAttribute('class', 'rotation-touch');
+          touchCircle.setAttribute('r', '24');
+          grip.append(touchCircle);
+          const knob = document.createElementNS(SVG_NS, 'circle');
+          knob.setAttribute('class', 'rotation-knob');
+          knob.setAttribute('r', '17');
+          grip.append(knob);
+          const symbol = document.createElementNS(SVG_NS, 'text');
+          symbol.setAttribute('class', 'rotation-symbol');
+          symbol.textContent = '↻';
+          grip.append(symbol);
+          group.append(grip);
+        }
         return group;
       }
 
@@ -496,7 +529,7 @@
         if (!position) return;
         stationInfo.textContent = `1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）`;
         stationAngle.value = String(position.rotation);
-        stationAngleValue.textContent = `${position.rotation}°`;
+        stationAngleValue.textContent = `${position.rotation.toFixed(1)}°`;
       }
 
       function selectStation(id) {
@@ -510,6 +543,53 @@
         if (!target) return null;
         const id = Number(target.getAttribute('data-station-id'));
         return positions.find(position => position.id === id && position.mode === mapMode) || null;
+      }
+
+      function rotationGripFromEvent(event) {
+        const grip = event.target?.closest?.('[data-rotate-station-id]');
+        if (!grip) return null;
+        const id = Number(grip.getAttribute('data-rotate-station-id'));
+        return positions.find(position => position.id === id && position.mode === mapMode) || null;
+      }
+
+      function stationCanvasCenter(position) {
+        if (mapMode === 'kariya') return geoToCanvas(position.lon, position.lat);
+        const margin = halfTrackWidth(position.carCount);
+        return {
+          x: Math.max(margin, Math.min(canvasSize.width - margin, position.xRatio * canvasSize.width)),
+          y: Math.max(47, Math.min(canvasSize.height - 47, position.yRatio * canvasSize.height))
+        };
+      }
+
+      function rotationAngleAtPointer(event, position) {
+        const point = rawPointerOnCanvas(event);
+        if (!point) return null;
+        const center = stationCanvasCenter(position);
+        if (Math.hypot(point.x - center.x, point.y - center.y) < .001) return null;
+        return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
+      }
+
+      function beginRotationDrag(event, position) {
+        const pointerAngle = rotationAngleAtPointer(event, position);
+        if (pointerAngle === null) return;
+        selectStation(position.id);
+        rotationDragStart = {
+          id: position.id,
+          pointerId: event.pointerId,
+          offset: pointerAngle - position.rotation
+        };
+        stationDragStart = null;
+        svg.setPointerCapture(event.pointerId);
+        hint.textContent = '紫の↻を動かすとホームが自由に回転します';
+      }
+
+      function dragRotation(event) {
+        if (!rotationDragStart || rotationDragStart.pointerId !== event.pointerId) return false;
+        const position = selectedStation();
+        if (!position || position.id !== rotationDragStart.id) return false;
+        const pointerAngle = rotationAngleAtPointer(event, position);
+        if (pointerAngle !== null) setRotation(pointerAngle - rotationDragStart.offset);
+        return true;
       }
 
       function beginStationDrag(event, position) {
@@ -551,18 +631,24 @@
       function setRotation(degrees) {
         const position = selectedStation();
         if (!position) return;
-        position.rotation = ((Math.round(degrees) % 360) + 360) % 360;
+        position.rotation = ((degrees % 360) + 360) % 360;
         redrawPlaced();
         updateStationEditor();
       }
 
-      function pointerOnCanvas(event) {
+      function rawPointerOnCanvas(event) {
         const matrix = svg.getScreenCTM();
         if (!matrix) return null;
         const point = svg.createSVGPoint();
         point.x = event.clientX;
         point.y = event.clientY;
         const local = point.matrixTransform(matrix.inverse());
+        return { x: local.x, y: local.y };
+      }
+
+      function pointerOnCanvas(event) {
+        const local = rawPointerOnCanvas(event);
+        if (!local) return null;
         if (mapMode === 'kariya') return { x: local.x, y: local.y };
         const trackEnd = halfTrackWidth(selectedCars);
         return {
@@ -706,6 +792,7 @@
         mapMode = modeSelect.value;
         selectedStationId = null;
         stationDragStart = null;
+        rotationDragStart = null;
         touches.clear();
         pendingTouchPlacement = null;
         fitCanvas();
@@ -714,14 +801,6 @@
       });
 
       stationAngle.addEventListener('input', () => setRotation(Number(stationAngle.value)));
-      document.querySelector('#rotate-left').addEventListener('click', () => {
-        const position = selectedStation();
-        if (position) setRotation(position.rotation - 15);
-      });
-      document.querySelector('#rotate-right').addEventListener('click', () => {
-        const position = selectedStation();
-        if (position) setRotation(position.rotation + 15);
-      });
       document.querySelector('#deselect-station').addEventListener('click', () => {
         selectStation(null);
         hint.textContent = '「1面2線」を選んで配置できます';
@@ -736,6 +815,10 @@
           if (!touch) return;
           touch.x = event.clientX;
           touch.y = event.clientY;
+          if (touches.size === 1 && dragRotation(event)) {
+            event.preventDefault();
+            return;
+          }
           if (touches.size === 1 && dragStation(event)) {
             event.preventDefault();
             return;
@@ -760,6 +843,7 @@
           event.preventDefault();
           return;
         }
+        if (dragRotation(event)) return;
         if (dragStation(event)) return;
         if (mousePanStart) {
           const bounds = svg.getBoundingClientRect();
@@ -772,16 +856,22 @@
       });
       svg.addEventListener('pointerleave', () => preview.setAttribute('visibility', 'hidden'));
       svg.addEventListener('pointerdown', event => {
+        const hitGrip = rotationGripFromEvent(event);
         const hitStation = stationFromEvent(event);
         if (event.pointerType === 'touch') {
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
-          if (touches.size === 1 && hitStation) {
+          if (touches.size === 1 && hitGrip) {
+            beginRotationDrag(event, hitGrip);
+            pendingTouchPlacement = null;
+            panStart = null;
+          } else if (touches.size === 1 && hitStation) {
             beginStationDrag(event, hitStation);
             pendingTouchPlacement = null;
             panStart = null;
           } else {
             stationDragStart = null;
+            rotationDragStart = null;
             if (touches.size === 1) selectStation(null);
             pendingTouchPlacement = touches.size === 1 && placing
               ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
@@ -795,7 +885,9 @@
           return;
         }
         if (event.button !== 0) return;
-        if (hitStation) {
+        if (hitGrip) {
+          beginRotationDrag(event, hitGrip);
+        } else if (hitStation) {
           beginStationDrag(event, hitStation);
         } else if (mapMode === 'kariya' && !placing) {
           selectStation(null);
@@ -810,16 +902,19 @@
       svg.addEventListener('pointerup', event => {
         if (event.pointerType !== 'touch') {
           stationDragStart = null;
+          rotationDragStart = null;
           mousePanStart = null;
           return;
         }
         const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
+        const finishedRotationDrag = rotationDragStart?.pointerId === event.pointerId;
         const tap = pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
           touches.size === 1 &&
           Math.hypot(event.clientX - pendingTouchPlacement.x,
             event.clientY - pendingTouchPlacement.y) <= TAP_SLOP;
         touches.delete(event.pointerId);
         if (finishedStationDrag) stationDragStart = null;
+        if (finishedRotationDrag) rotationDragStart = null;
         pendingTouchPlacement = null;
         pinchStart = null;
         panStart = null;
@@ -830,6 +925,7 @@
       svg.addEventListener('pointercancel', event => {
         touches.delete(event.pointerId);
         if (stationDragStart?.pointerId === event.pointerId) stationDragStart = null;
+        if (rotationDragStart?.pointerId === event.pointerId) rotationDragStart = null;
         pendingTouchPlacement = null;
         pinchStart = null;
         panStart = null;
