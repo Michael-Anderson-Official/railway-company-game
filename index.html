@@ -4,7 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#f7f8fa">
-  <title>鉄道会社経営ゲーム | 配線エディタ</title>
+  <title>鉄道会社経営ゲーム | 刈谷市地下鉄構想</title>
   <style>
     :root {
       color-scheme: light;
@@ -50,21 +50,51 @@
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
     #board { display: block; width: 100%; height: 100%; touch-action: none; }
     #board.placing { cursor: crosshair; }
+    .map-tiles, .map-markers { pointer-events: none; }
+    .map-tiles { opacity: .93; }
     .track { fill: none; stroke: #303e4d; stroke-width: 5; stroke-linecap: round; }
     .platform { fill: #e8edf1; stroke: #778594; stroke-width: 2; }
     .platform-inset { fill: none; stroke: #b6c0ca; stroke-width: 1; }
     .platform-label { fill: #64758a; font-size: 14px; font-weight: 700; text-anchor: middle; dominant-baseline: central; }
+    .map-marker { stroke: #fff; stroke-width: 2.5; }
+    .map-marker.jr { fill: #d47922; }
+    .map-marker.meitetsu { fill: #ca3852; }
+    .map-marker.interchange { fill: #804cba; }
+    .map-marker.commerce { fill: #21866c; }
+    .map-marker.industry { fill: #557ca7; }
+    .map-label {
+      font-size: 12px; font-weight: 800; fill: #25374b;
+      stroke: #fff; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke;
+    }
     .preview { opacity: .42; pointer-events: none; }
     .hint {
       position: absolute; bottom: 20px; left: 24px; pointer-events: none;
       padding: 9px 12px; background: #f7f8fbd9; color: #64758a;
       border: 1px solid #edf0f3; border-radius: 8px; font-size: 12px;
     }
+    .map-data { position: absolute; z-index: 2; top: 14px; left: 14px; max-width: min(340px, calc(100% - 98px)); }
+    .map-data details { background: #fffffff0; border: 1px solid #d5dee7; border-radius: 10px; box-shadow: 0 4px 12px #15283f14; }
+    .map-data summary { padding: 11px 13px; cursor: pointer; font-size: 12px; font-weight: 800; }
+    .map-data-body { max-height: 46dvh; overflow: auto; padding: 0 13px 12px; font-size: 12px; line-height: 1.65; color: #516176; }
+    .map-data-body p { margin: 7px 0; }
+    .map-data-body strong { color: #182330; }
+    .map-data-body table { border-collapse: collapse; width: 100%; margin: 7px 0; font-size: 11px; }
+    .map-data-body th, .map-data-body td { padding: 4px 3px; border-bottom: 1px solid #e6eaf0; text-align: left; }
+    .map-data-body td:last-child { text-align: right; font-variant-numeric: tabular-nums; }
+    .map-data-body a, .map-credit a { color: #2d5aa7; }
+    .zoom-controls { position: absolute; z-index: 2; right: 14px; top: 14px; display: grid; gap: 7px; }
+    .zoom-controls button { width: 42px; height: 42px; border-radius: 10px; border: 1px solid #d5dee7; background: #ffffffed; color: #203047; font-size: 24px; cursor: pointer; box-shadow: 0 2px 7px #15283f16; }
+    .zoom-controls button:focus-visible { outline: 3px solid #86b3ff; }
+    .map-credit { position: absolute; bottom: 11px; right: 12px; padding: 3px 6px; border-radius: 4px; background: #ffffffe3; color: #5d6977; font-size: 10px; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
       .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
       .tool-hint { flex-basis: 100%; white-space: normal; }
       .hint { bottom: 14px; left: 14px; font-size: 11px; }
+      .map-data { top: 10px; left: 10px; }
+      .zoom-controls { top: 10px; right: 10px; }
+      .zoom-controls button { width: 38px; height: 38px; }
+      .map-credit { right: 7px; bottom: 4px; font-size: 9px; }
     }
   </style>
 </head>
@@ -73,7 +103,7 @@
     <header class="header">
       <div>
         <h1>鉄道会社経営ゲーム</h1>
-        <p class="subtitle">配線エディタ</p>
+        <p class="subtitle">刈谷市地下鉄構想 · 配線エディタ</p>
       </div>
       <div class="tool" role="toolbar" aria-label="配置する設備">
         <button id="place-tool" type="button" aria-pressed="false">
@@ -83,6 +113,13 @@
           </svg>
           1面2線
         </button>
+        <div class="length-control">
+          <label for="map-mode">地図</label>
+          <select id="map-mode" aria-label="編集する地図">
+            <option value="kariya" selected>刈谷市</option>
+            <option value="blank">白紙</option>
+          </select>
+        </div>
         <div class="length-control">
           <label for="car-count">ホーム長</label>
           <select id="car-count" aria-label="ホームの対応両数">
@@ -108,10 +145,48 @@
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
       <svg id="board" viewBox="0 0 1440 820" preserveAspectRatio="xMidYMid meet" role="img" aria-label="配線図を作成する白紙のキャンバス">
+        <g id="map-tiles" class="map-tiles"></g>
+        <g id="map-markers" class="map-markers"></g>
         <g id="placed"></g>
         <g id="preview" class="preview" visibility="hidden"></g>
       </svg>
+      <div class="map-data" id="map-data">
+        <details>
+          <summary>刈谷市 <span aria-hidden="true">·</span> 人口153,200人</summary>
+          <div class="map-data-body">
+            <p><strong>人口：</strong>153,200人／71,228世帯（2026年10月1日・住民基本台帳）</p>
+            <p><strong>商業：</strong>卸売・小売業960事業所、うち小売698事業所（2021年経済センサス）</p>
+            <p><strong>既存鉄道：</strong>JR東海道本線、名鉄名古屋本線・三河線の3路線、8駅</p>
+            <p><strong>2024年度：</strong>JR刈谷駅乗車1,058.6万人／名鉄刈谷駅乗降866.9万人。計数方法が異なるため単純比較不可。</p>
+            <p>駅はJR＝橙・名鉄＝赤・乗換＝紫、主要商業拠点＝緑、工業拠点＝青で表示します。</p>
+            <p><strong>駅別利用者数（2024年度、千人）</strong></p>
+            <table aria-label="刈谷市の駅別利用者数">
+              <thead><tr><th>会社</th><th>駅</th><th>人数</th></tr></thead>
+              <tbody>
+                <tr><td>JR乗車</td><td>刈谷</td><td>10,586</td></tr>
+                <tr><td>JR乗車</td><td>東刈谷</td><td>1,706</td></tr>
+                <tr><td>JR乗車</td><td>逢妻</td><td>922</td></tr>
+                <tr><td>JR乗車</td><td>野田新町</td><td>886</td></tr>
+                <tr><td>名鉄乗降</td><td>刈谷</td><td>8,669</td></tr>
+                <tr><td>名鉄乗降</td><td>刈谷市</td><td>2,011</td></tr>
+                <tr><td>名鉄乗降</td><td>小垣江</td><td>1,297</td></tr>
+                <tr><td>名鉄乗降</td><td>富士松</td><td>1,208</td></tr>
+                <tr><td>名鉄乗降</td><td>一ツ木</td><td>1,324</td></tr>
+              </tbody>
+            </table>
+            <p><strong>掲載商業拠点：</strong>みなくる刈谷／アピタ刈谷店／ルビットタウン刈谷／イオンタウン刈谷／刈谷ハイウェイオアシス</p>
+            <p><strong>掲載工業拠点：</strong>デンソー本社／豊田自動織機 本社・刈谷工場／デンソー高棚製作所</p>
+            <p>全店舗・全事業所を表示したものではありません。2026年町別人口は出典先のCSVにありますが、地図への町別人口の割り当ては未実装です。</p>
+            <p><a href="https://www.city.kariya.lg.jp/shisei/tokei/jinko/index.html" target="_blank" rel="noopener noreferrer">人口（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/opendata/1007323/o_setai/1021663.html" target="_blank" rel="noopener noreferrer">町別人口CSV（市公式）</a> · <a href="https://www.city.kariya.lg.jp/shisei/tokei/1005107.html" target="_blank" rel="noopener noreferrer">商業・鉄道統計（市公式）</a></p>
+          </div>
+        </details>
+      </div>
+      <div class="zoom-controls" aria-label="地図の拡大縮小">
+        <button type="button" id="zoom-in" aria-label="拡大">＋</button>
+        <button type="button" id="zoom-out" aria-label="縮小">−</button>
+      </div>
       <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
+      <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
     </section>
   </main>
   <script>
@@ -119,22 +194,157 @@
       'use strict';
 
       const svg = document.querySelector('#board');
+      const mapTiles = document.querySelector('#map-tiles');
+      const mapMarkers = document.querySelector('#map-markers');
       const placed = document.querySelector('#placed');
       const preview = document.querySelector('#preview');
       const button = document.querySelector('#place-tool');
+      const modeSelect = document.querySelector('#map-mode');
       const lengthSelect = document.querySelector('#car-count');
       const hint = document.querySelector('#hint');
+      const mapData = document.querySelector('#map-data');
+      const mapCredit = document.querySelector('#map-credit');
       const SVG_NS = 'http://www.w3.org/2000/svg';
       const positions = [];
       const touches = new Map();
-      const MAX_ZOOM = 4;
+      const MAX_ZOOM = 16;
+      const MIN_ZOOM = 0.1;
       const TAP_SLOP = 14;
+      const BASE_MAP_ZOOM = 13;
+      const MAP_CENTER = { lat: 35.004, lon: 137.012 };
+      // 駅座標：OpenStreetMap、年度別乗車・乗降：刈谷の統計（令和7年版、2024年度実績）。
+      const railStations = [
+        { name: '刈谷', lat: 34.99116, lon: 137.00887, kind: 'interchange', jrBoardings: 10586000, meitetsuTraffic: 8669000 },
+        { name: '逢妻', lat: 34.99841, lon: 136.98991, kind: 'jr', jrBoardings: 922000 },
+        { name: '野田新町', lat: 34.98345, lon: 137.02811, kind: 'jr', jrBoardings: 886000 },
+        { name: '東刈谷', lat: 34.97755, lon: 137.04311, kind: 'jr', jrBoardings: 1706000 },
+        { name: '富士松', lat: 35.02945, lon: 137.01662, kind: 'meitetsu', meitetsuTraffic: 1208000 },
+        { name: '一ツ木', lat: 35.01382, lon: 137.02541, kind: 'meitetsu', meitetsuTraffic: 1324000 },
+        { name: '刈谷市', lat: 34.98481, lon: 136.99366, kind: 'meitetsu', meitetsuTraffic: 2011000 },
+        { name: '小垣江', lat: 34.96375, lon: 136.99538, kind: 'meitetsu', meitetsuTraffic: 1297000 }
+      ];
+      // 商業の代表施設（全店ではない）。施設位置は公開地図と各施設の案内に基づく。
+      const commerceSites = [
+        { name: 'みなくる刈谷', lat: 34.98941, lon: 137.00795 },
+        { name: 'アピタ刈谷店', lat: 34.99114, lon: 137.00510 },
+        { name: 'ルビットタウン刈谷', lat: 35.00206, lon: 136.99864 },
+        { name: 'イオンタウン刈谷', lat: 35.03851, lon: 137.02742 },
+        { name: '刈谷ハイウェイオアシス', lat: 35.04110, lon: 137.04825 }
+      ];
+      const industrySites = [
+        { name: 'デンソー本社', lat: 34.99790, lon: 137.00708 },
+        { name: '豊田自動織機 本社・刈谷工場', lat: 34.99353, lon: 136.99839 },
+        { name: 'デンソー高棚製作所', lat: 34.95479, lon: 137.02911 }
+      ];
       let placing = false;
+      let mapMode = modeSelect.value;
       let selectedCars = Number(lengthSelect.value);
       let canvasSize = { width: 1440, height: 820 };
       let view = { x: 0, y: 0, width: 1440, height: 820 };
       let pendingTouchPlacement = null;
       let pinchStart = null;
+      let panStart = null;
+      let mousePanStart = null;
+      let renderedTiles = '';
+
+      function mercator(lon, lat, zoom) {
+        const size = 256 * 2 ** zoom;
+        const latitude = Math.max(-85, Math.min(85, lat)) * Math.PI / 180;
+        return {
+          x: (lon + 180) / 360 * size,
+          y: (1 - Math.asinh(Math.tan(latitude)) / Math.PI) / 2 * size
+        };
+      }
+
+      function mapScale() {
+        return canvasSize.width / 480 * .9;
+      }
+
+      function geoToCanvas(lon, lat) {
+        const origin = mercator(MAP_CENTER.lon, MAP_CENTER.lat, BASE_MAP_ZOOM);
+        const location = mercator(lon, lat, BASE_MAP_ZOOM);
+        return {
+          x: canvasSize.width / 2 + (location.x - origin.x) * mapScale(),
+          y: canvasSize.height / 2 + (location.y - origin.y) * mapScale()
+        };
+      }
+
+      function canvasToGeo(x, y) {
+        const origin = mercator(MAP_CENTER.lon, MAP_CENTER.lat, BASE_MAP_ZOOM);
+        const worldX = origin.x + (x - canvasSize.width / 2) / mapScale();
+        const worldY = origin.y + (y - canvasSize.height / 2) / mapScale();
+        const size = 256 * 2 ** BASE_MAP_ZOOM;
+        return {
+          lon: worldX / size * 360 - 180,
+          lat: Math.atan(Math.sinh(Math.PI * (1 - 2 * worldY / size))) * 180 / Math.PI
+        };
+      }
+
+      function renderMapTiles() {
+        if (mapMode !== 'kariya') return;
+        const factor = canvasSize.width / view.width * mapScale();
+        const zoom = Math.max(5, Math.min(18, Math.round(BASE_MAP_ZOOM + Math.log2(factor))));
+        const tileSize = 256 * mapScale() / 2 ** (zoom - BASE_MAP_ZOOM);
+        const origin = mercator(MAP_CENTER.lon, MAP_CENTER.lat, BASE_MAP_ZOOM);
+        const baseX = canvasSize.width / 2 - origin.x * mapScale();
+        const baseY = canvasSize.height / 2 - origin.y * mapScale();
+        const minX = Math.max(0, Math.floor((view.x - baseX) / tileSize));
+        const maxX = Math.min(2 ** zoom - 1, Math.floor((view.x + view.width - baseX) / tileSize));
+        const minY = Math.max(0, Math.floor((view.y - baseY) / tileSize));
+        const maxY = Math.min(2 ** zoom - 1, Math.floor((view.y + view.height - baseY) / tileSize));
+        const key = [zoom, minX, maxX, minY, maxY, canvasSize.width, canvasSize.height].join('/');
+        if (key === renderedTiles) return;
+        renderedTiles = key;
+        const tiles = [];
+        for (let x = minX; x <= maxX; x++) {
+          for (let y = minY; y <= maxY; y++) {
+            const image = document.createElementNS(SVG_NS, 'image');
+            image.setAttribute('x', String(baseX + x * tileSize));
+            image.setAttribute('y', String(baseY + y * tileSize));
+            image.setAttribute('width', String(tileSize + .02));
+            image.setAttribute('height', String(tileSize + .02));
+            image.setAttribute('href', `https://cyberjapandata.gsi.go.jp/xyz/std/${zoom}/${x}/${y}.png`);
+            tiles.push(image);
+          }
+        }
+        mapTiles.replaceChildren(...tiles);
+      }
+
+      function renderMapMarkers() {
+        if (mapMode !== 'kariya') return;
+        const zoom = canvasSize.width / view.width;
+        const markers = [];
+        for (const site of [
+          ...railStations,
+          ...commerceSites.map(site => ({ ...site, kind: 'commerce' })),
+          ...industrySites.map(site => ({ ...site, kind: 'industry' }))
+        ]) {
+          const point = geoToCanvas(site.lon, site.lat);
+          if (point.x < view.x - 100 / zoom || point.x > view.x + view.width + 100 / zoom ||
+              point.y < view.y - 100 / zoom || point.y > view.y + view.height + 100 / zoom) continue;
+          const marker = document.createElementNS(SVG_NS, 'g');
+          marker.setAttribute('transform', `translate(${point.x} ${point.y}) scale(${1 / zoom})`);
+          const circle = document.createElementNS(SVG_NS, 'circle');
+          circle.setAttribute('class', `map-marker ${site.kind}`);
+          circle.setAttribute('r', site.kind === 'commerce' || site.kind === 'industry' ? '5.5' : '7.5');
+          marker.append(circle);
+          const title = document.createElementNS(SVG_NS, 'title');
+          const jr = site.jrBoardings ? `／JR乗車 ${site.jrBoardings.toLocaleString('ja-JP')}人（2024年度）` : '';
+          const mt = site.meitetsuTraffic ? `／名鉄乗降 ${site.meitetsuTraffic.toLocaleString('ja-JP')}人（2024年度）` : '';
+          title.textContent = `${site.name}${jr}${mt}`;
+          marker.append(title);
+          if (zoom >= .7 && (site.kind === 'jr' || site.kind === 'meitetsu' || site.kind === 'interchange' || zoom >= 2.2)) {
+            const label = document.createElementNS(SVG_NS, 'text');
+            label.setAttribute('class', 'map-label');
+            label.setAttribute('x', '11');
+            label.setAttribute('y', '4');
+            label.textContent = site.name;
+            marker.append(label);
+          }
+          markers.push(marker);
+        }
+        mapMarkers.replaceChildren(...markers);
+      }
 
       // 島式ホーム1面を2本の線路で挟む、独立した配線ユニット。
       function platformWidth(carCount) {
@@ -145,10 +355,12 @@
         return platformWidth(carCount) / 2 + 40;
       }
 
-      function createStation(x, y, carCount) {
+      function createStation(x, y, carCount, city = false) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
         group.setAttribute('aria-label', `1面2線 ${carCount}両対応`);
+        const diagram = document.createElementNS(SVG_NS, 'g');
+        if (city) diagram.setAttribute('transform', `scale(${.06 * canvasSize.width / 480})`);
         const width = platformWidth(carCount);
         const trackEnd = halfTrackWidth(carCount);
         const tracks = [-47, 47];
@@ -156,7 +368,7 @@
           const line = document.createElementNS(SVG_NS, 'path');
           line.setAttribute('class', 'track');
           line.setAttribute('d', `M ${-trackEnd} ${offset} H ${trackEnd}`);
-          group.append(line);
+          diagram.append(line);
         }
         const platform = document.createElementNS(SVG_NS, 'rect');
         platform.setAttribute('class', 'platform');
@@ -165,7 +377,7 @@
         platform.setAttribute('width', String(width));
         platform.setAttribute('height', '58');
         platform.setAttribute('rx', '6');
-        group.append(platform);
+        diagram.append(platform);
         const inset = document.createElementNS(SVG_NS, 'rect');
         inset.setAttribute('class', 'platform-inset');
         inset.setAttribute('x', String(-width / 2 + 8));
@@ -173,13 +385,15 @@
         inset.setAttribute('width', String(width - 16));
         inset.setAttribute('height', '42');
         inset.setAttribute('rx', '3');
-        group.append(inset);
+        diagram.append(inset);
         const label = document.createElementNS(SVG_NS, 'text');
-        label.setAttribute('class', 'platform-label');
+        label.setAttribute('class', city ? 'map-label' : 'platform-label');
         label.setAttribute('x', '0');
-        label.setAttribute('y', '0');
+        label.setAttribute('y', city ? '-10' : '0');
         label.textContent = `${carCount}両`;
-        group.append(label);
+        if (!city) diagram.append(label);
+        group.append(diagram);
+        if (city) group.append(label);
         return group;
       }
 
@@ -190,6 +404,7 @@
         point.x = event.clientX;
         point.y = event.clientY;
         const local = point.matrixTransform(matrix.inverse());
+        if (mapMode === 'kariya') return { x: local.x, y: local.y };
         const trackEnd = halfTrackWidth(selectedCars);
         return {
           x: Math.max(trackEnd, Math.min(canvasSize.width - trackEnd, local.x)),
@@ -198,15 +413,29 @@
       }
 
       function applyView(next) {
-        const width = Math.max(canvasSize.width / MAX_ZOOM, Math.min(canvasSize.width, next.width));
+        const width = Math.max(canvasSize.width / MAX_ZOOM,
+          Math.min(canvasSize.width / MIN_ZOOM, next.width));
         const height = width * canvasSize.height / canvasSize.width;
         view = {
-          x: Math.max(0, Math.min(canvasSize.width - width, next.x)),
-          y: Math.max(0, Math.min(canvasSize.height - height, next.y)),
+          x: next.x,
+          y: next.y,
           width,
           height
         };
         svg.setAttribute('viewBox', `${view.x} ${view.y} ${view.width} ${view.height}`);
+        renderMapTiles();
+        renderMapMarkers();
+      }
+
+      function zoomAtCenter(factor) {
+        const width = Math.max(canvasSize.width / MAX_ZOOM,
+          Math.min(canvasSize.width / MIN_ZOOM, view.width * factor));
+        const height = width * canvasSize.height / canvasSize.width;
+        applyView({
+          x: view.x + view.width / 2 - width / 2,
+          y: view.y + view.height / 2 - height / 2,
+          width
+        });
       }
 
       function beginPinch() {
@@ -229,7 +458,7 @@
         const distance = Math.max(1, Math.hypot(a.x - b.x, a.y - b.y));
         const bounds = svg.getBoundingClientRect();
         const width = Math.max(canvasSize.width / MAX_ZOOM,
-          Math.min(canvasSize.width, pinchStart.width * pinchStart.distance / distance));
+          Math.min(canvasSize.width / MIN_ZOOM, pinchStart.width * pinchStart.distance / distance));
         const height = width * canvasSize.height / canvasSize.width;
         const midX = (a.x + b.x) / 2;
         const midY = (a.y + b.y) / 2;
@@ -244,10 +473,28 @@
         if (!placing) return;
         const point = pointerOnCanvas(event);
         if (!point) return;
-        positions.push({ xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars });
-        placed.append(createStation(point.x, point.y, selectedCars));
-        hint.textContent = `1面2線（${selectedCars}両）：${positions.length}か所配置済み`;
+        const position = mapMode === 'kariya'
+          ? { mode: mapMode, ...canvasToGeo(point.x, point.y), carCount: selectedCars }
+          : { mode: mapMode, xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, carCount: selectedCars };
+        positions.push(position);
+        placed.append(createStation(point.x, point.y, selectedCars, mapMode === 'kariya'));
+        hint.textContent = `1面2線（${selectedCars}両）：${positions.filter(site => site.mode === mapMode).length}か所配置済み`;
         preview.setAttribute('visibility', 'hidden');
+      }
+
+      function redrawPlaced() {
+        placed.replaceChildren(...positions.filter(position => position.mode === mapMode).map(position => {
+          if (mapMode === 'kariya') {
+            const point = geoToCanvas(position.lon, position.lat);
+            return createStation(point.x, point.y, position.carCount, true);
+          }
+          const margin = halfTrackWidth(position.carCount);
+          return createStation(
+            Math.max(margin, Math.min(canvasSize.width - margin, position.xRatio * canvasSize.width)),
+            Math.max(47, Math.min(canvasSize.height - 47, position.yRatio * canvasSize.height)),
+            position.carCount
+          );
+        }));
       }
 
       function fitCanvas() {
@@ -257,12 +504,19 @@
         const width = Math.max(480, Math.round(bounds.width * 1.05));
         const height = Math.round(width * bounds.height / bounds.width);
         canvasSize = { width, height };
+        mapData.hidden = mapMode !== 'kariya';
+        mapCredit.hidden = mapMode !== 'kariya';
+        svg.setAttribute('aria-label', mapMode === 'kariya' ? '刈谷市の地下鉄計画地図' : '配線図を作成する白紙のキャンバス');
+        if (mapMode !== 'kariya') {
+          mapTiles.replaceChildren();
+          mapMarkers.replaceChildren();
+        }
+        renderedTiles = '';
         applyView({ x: 0, y: 0, width });
         pinchStart = null;
-        placed.replaceChildren(...positions.map(({ xRatio, yRatio, carCount }) => createStation(
-          Math.max(halfTrackWidth(carCount), Math.min(width - halfTrackWidth(carCount), xRatio * width)),
-          Math.max(47, Math.min(height - 47, yRatio * height)), carCount
-        )));
+        panStart = null;
+        mousePanStart = null;
+        redrawPlaced();
         preview.setAttribute('visibility', 'hidden');
       }
 
@@ -270,7 +524,7 @@
         if (!placing || touches.size || event.pointerType === 'touch') return;
         const point = pointerOnCanvas(event);
         if (!point) return;
-        preview.replaceChildren(createStation(point.x, point.y, selectedCars));
+        preview.replaceChildren(createStation(point.x, point.y, selectedCars, mapMode === 'kariya'));
         preview.setAttribute('visibility', 'visible');
       }
 
@@ -288,6 +542,17 @@
         hint.textContent = placing ? `${selectedCars}両対応のホームを好きな場所に配置` : `${selectedCars}両対応のホームを選択中`;
       });
 
+      modeSelect.addEventListener('change', () => {
+        mapMode = modeSelect.value;
+        touches.clear();
+        pendingTouchPlacement = null;
+        fitCanvas();
+        hint.textContent = mapMode === 'kariya' ? '刈谷市の地図にホームを配置できます' : '白紙のキャンバスにホームを配置できます';
+      });
+
+      document.querySelector('#zoom-in').addEventListener('click', () => zoomAtCenter(.5));
+      document.querySelector('#zoom-out').addEventListener('click', () => zoomAtCenter(2));
+
       svg.addEventListener('pointermove', event => {
         if (event.pointerType === 'touch') {
           const touch = touches.get(event.pointerId);
@@ -298,11 +563,30 @@
               Math.hypot(touch.x - pendingTouchPlacement.x, touch.y - pendingTouchPlacement.y) > TAP_SLOP) {
             pendingTouchPlacement = null;
           }
+          if (mapMode === 'kariya' && touches.size === 1 && panStart && panStart.id === event.pointerId) {
+            const dx = touch.x - panStart.x;
+            const dy = touch.y - panStart.y;
+            if (!placing || Math.hypot(dx, dy) > TAP_SLOP) {
+              const bounds = svg.getBoundingClientRect();
+              applyView({
+                x: panStart.view.x - dx / bounds.width * panStart.view.width,
+                y: panStart.view.y - dy / bounds.height * panStart.view.height,
+                width: panStart.view.width
+              });
+            }
+          }
           updatePinch();
           event.preventDefault();
           return;
         }
-        showPreview(event);
+        if (mousePanStart) {
+          const bounds = svg.getBoundingClientRect();
+          applyView({
+            x: mousePanStart.view.x - (event.clientX - mousePanStart.x) / bounds.width * mousePanStart.view.width,
+            y: mousePanStart.view.y - (event.clientY - mousePanStart.y) / bounds.height * mousePanStart.view.height,
+            width: mousePanStart.view.width
+          });
+        } else showPreview(event);
       });
       svg.addEventListener('pointerleave', () => preview.setAttribute('visibility', 'hidden'));
       svg.addEventListener('pointerdown', event => {
@@ -311,6 +595,8 @@
           svg.setPointerCapture(event.pointerId);
           pendingTouchPlacement = touches.size === 1 && placing
             ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
+          panStart = touches.size === 1 && mapMode === 'kariya'
+            ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
           pinchStart = null;
           beginPinch();
           preview.setAttribute('visibility', 'hidden');
@@ -318,11 +604,17 @@
           return;
         }
         if (event.button !== 0) return;
-        placeStation(event);
+        if (mapMode === 'kariya' && !placing) {
+          mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
+          svg.setPointerCapture(event.pointerId);
+        } else placeStation(event);
         event.preventDefault();
       });
       svg.addEventListener('pointerup', event => {
-        if (event.pointerType !== 'touch') return;
+        if (event.pointerType !== 'touch') {
+          mousePanStart = null;
+          return;
+        }
         const tap = pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
           touches.size === 1 &&
           Math.hypot(event.clientX - pendingTouchPlacement.x,
@@ -330,6 +622,7 @@
         touches.delete(event.pointerId);
         pendingTouchPlacement = null;
         pinchStart = null;
+        panStart = null;
         beginPinch();
         if (tap) placeStation(event);
         event.preventDefault();
@@ -338,6 +631,8 @@
         touches.delete(event.pointerId);
         pendingTouchPlacement = null;
         pinchStart = null;
+        panStart = null;
+        mousePanStart = null;
         beginPinch();
         preview.setAttribute('visibility', 'hidden');
       });
