@@ -1287,7 +1287,7 @@
           stationNameLabel.textContent = name;
           group.append(stationNameLabel);
         }
-        if (stationId !== null && stationId === selectedStationId) {
+        if (stationId !== null && stationId === selectedStationId && !layingTrack) {
           const zoom = canvasSize.width / view.width;
           const radians = rotation * Math.PI / 180;
           const handleX = Math.cos(radians) * 60 / zoom;
@@ -1627,7 +1627,7 @@
         svg.classList.toggle('placing', placing);
         preview.setAttribute('visibility', 'hidden');
         updateStationEditor();
-        renderStationEndpoints();
+        redrawPlaced();
         hint.textContent = placing ? `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを好きな場所に配置` : '「1面2線」を選んで配置できます';
       });
 
@@ -1645,7 +1645,7 @@
         preview.setAttribute('visibility', 'hidden');
         updateStationEditor();
         syncTrackOrigins();
-        renderStationEndpoints();
+        redrawPlaced();
         hint.textContent = layingTrack
           ? '接続元を選んで、相手の駅の上り側／下り側の丸をタップしてください'
           : '「複線」で駅から線路を延ばせます';

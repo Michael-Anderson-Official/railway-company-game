@@ -131,6 +131,8 @@ nodes['#station-angle'].value = '0'; // The original free-end test uses an expli
 nodes['#station-angle'].dispatch('input');
 nodes['#track-tool'].dispatch('click');
 assert.equal(nodes['#track-editor'].hidden, false);
+assert.ok(!nodes['#placed'].children[0].children.some(child => child.attributes.class === 'rotation-grip'),
+  'rotation handles do not obscure station-end taps during track construction');
 assert.equal(nodes['#track-origin'].children.length, 2);
 assert.equal(nodes['#track-origin'].value, 'station:1:-1');
 assert.equal(nodes['#build-track'].disabled, true, 'a destination is required');
