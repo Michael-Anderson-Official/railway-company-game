@@ -46,11 +46,13 @@ const ids = [
   '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
   '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
+  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
+  '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
-  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
+  '#track-editor', '#track-origin', '#track-route', '#track-destination', '#build-track', '#track-validation',
   '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel',
   '#interchange-dialog', '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'
 ];
@@ -586,4 +588,87 @@ nodes['#map-mode'].value = 'kariya';
 nodes['#map-mode'].dispatch('change');
 assert.equal(nodes['#depots'].children.length, 2);
 
-console.log('Tracks, six floors, two train models, depot placement, one-track capacity, purchase and touch selection OK');
+// Route names, two-letter codes, and unique station numbering work across the mobile UI.
+nodes['#route-manager'].hidden = true;
+nodes['#route-tool'].dispatch('click');
+assert.equal(nodes['#route-manager'].hidden, false, 'route manager opens independently of placement tools');
+nodes['#route-name'].value = '名鉄名古屋本線';
+nodes['#route-code'].value = 'N';
+nodes['#route-save'].dispatch('click');
+assert.match(nodes['#route-manager-status'].textContent, /英字2文字/, 'invalid route code is rejected');
+nodes['#route-code'].value = 'nh';
+nodes['#route-save'].dispatch('click');
+assert.match(nodes['#route-manager-status'].textContent, /名鉄名古屋本線（NH）を作成/);
+assert.equal(nodes['#route-list'].children.length, 1);
+assert.equal(nodes['#route-edit-target'].value, '1');
+nodes['#route-edit-target'].value = '';
+nodes['#route-edit-target'].dispatch('change');
+nodes['#route-name'].value = '京王線';
+nodes['#route-code'].value = 'NH';
+nodes['#route-save'].dispatch('click');
+assert.match(nodes['#route-manager-status'].textContent, /別の路線で使用中/, 'duplicate prefix is refused');
+nodes['#route-code'].value = 'KO';
+nodes['#route-save'].dispatch('click');
+assert.equal(nodes['#route-list'].children.length, 2);
+nodes['#route-close'].dispatch('click');
+assert.equal(nodes['#route-manager'].hidden, true);
+
+nodes['#map-mode'].value = 'blank';
+nodes['#map-mode'].dispatch('change');
+nodes['#floor-level'].value = '-4';
+nodes['#floor-level'].dispatch('change');
+nodes['#place-tool'].dispatch('click');
+mouseTap(150, 235);
+const firstNewStation = nodes['#placed'].children.at(-1);
+assert.ok(firstNewStation, 'first test station was placed');
+const trackNumbers = firstNewStation.children[0].children.filter(child => child.attributes.class === 'station-track-number');
+assert.deepEqual(trackNumbers.map(item => item.children.at(-1).textContent), ['1', '2'], 'station draws platform numbers 1 and 2');
+assert.match(firstNewStation.attributes['aria-label'], /1番線 上り方面・2番線 下り方面/);
+nodes['#station-route'].value = '1';
+nodes['#station-route'].dispatch('change');
+assert.equal(nodes['#station-route-number'].value, '1', 'first free number is suggested');
+nodes['#station-route-save'].dispatch('click');
+assert.match(nodes['#station-route-status'].textContent, /NH01/);
+assert.match(nodes['#placed'].children.at(-1).attributes['aria-label'], /NH01/);
+
+mouseTap(285, 435);
+nodes['#station-route'].value = '1';
+nodes['#station-route'].dispatch('change');
+assert.equal(nodes['#station-route-number'].value, '2', 'next number is auto-suggested');
+nodes['#station-route-number'].value = '1';
+nodes['#station-route-save'].dispatch('click');
+assert.match(nodes['#station-route-status'].textContent, /使用中/, 'same route cannot reuse a number');
+nodes['#station-route-number'].value = '2';
+nodes['#station-route-save'].dispatch('click');
+assert.match(nodes['#station-route-status'].textContent, /NH02/);
+nodes['#station-route'].value = '2';
+nodes['#station-route'].dispatch('change');
+nodes['#station-route-number'].value = '1';
+nodes['#station-route-save'].dispatch('click');
+assert.match(nodes['#placed'].children.at(-1).attributes['aria-label'], /NH02・KO01/, 'one station can have two route numbers');
+assert.equal(nodes['#station-route-list'].children.length, 2);
+
+nodes['#route-tool'].dispatch('click');
+nodes['#route-edit-target'].value = '2';
+nodes['#route-edit-target'].dispatch('change');
+nodes['#route-name'].value = '京王新線';
+nodes['#route-code'].value = 'KN';
+nodes['#route-save'].dispatch('click');
+assert.match(nodes['#route-list'].children[1].children[0].textContent, /KN/, 'a route prefix can be edited');
+nodes['#route-close'].dispatch('click');
+assert.match(nodes['#placed'].children.at(-1).attributes['aria-label'], /NH02・KN01/, 'renaming a route updates station numbering');
+
+nodes['#track-tool'].dispatch('click');
+assert.equal(nodes['#track-editor'].hidden, false);
+nodes['#track-origin'].value = `station:${firstNewStation.attributes['data-station-id']}:1`;
+nodes['#track-origin'].dispatch('change');
+nodes['#track-route'].value = '1';
+const countBeforeNamedTrack = routes().length;
+mouseTap(150, 585);
+assert.equal(nodes['#build-track'].disabled, false, nodes['#track-validation'].textContent);
+commit();
+assert.equal(routes().length, countBeforeNamedTrack + 1);
+assert.ok(routes().at(-1).children.some(child => child.attributes.class === 'route-track-guide'),
+  'a constructed track section displays its assigned route-colored guide');
+
+console.log('Tracks, route creation/editing, platform direction numbering, station numbering, two train models, depot and touch selection OK');

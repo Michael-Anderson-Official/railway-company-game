@@ -44,10 +44,12 @@ const nodes = Object.fromEntries([
   '#depot-tool', '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#place-tool', '#track-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
+  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
   '#station-name', '#station-interchange', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
-  '#track-editor', '#track-origin', '#track-destination', '#build-track', '#track-validation',
+  '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
+  '#track-editor', '#track-origin', '#track-route', '#track-destination', '#build-track', '#track-validation',
   '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel',
   '#interchange-dialog', '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'
 ].map(key => [key, new Element()]));
