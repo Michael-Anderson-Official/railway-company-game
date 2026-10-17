@@ -46,7 +46,7 @@ const ids = [
   '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
   '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
-  '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
+  '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
@@ -457,9 +457,13 @@ nodes['#fleet-tool'].dispatch('click');
 assert.equal(nodes['#fleet-panel'].hidden, false, 'rolling stock catalog opens');
 assert.equal(nodes['#vehicle-route'].children.length, 1, 'station-connected route is selectable');
 assert.equal(nodes['#fleet-preview'].children.length, 6, 'Meitetsu six-car preview');
+assert.equal(nodes['#vehicle-hero'].children[0].attributes.viewBox, '0 0 444 128', 'Meitetsu has an enlarged side-elevation drawing');
+assert.match(nodes['#vehicle-illustration-caption'].textContent, /名鉄2200系/);
 nodes['#vehicle-run'].dispatch('click');
 assert.equal(nodes['#train-layer'].children.length, 6, 'six real-length cars appear on constructed track');
 assert.equal(nodes['#train-layer'].children[0].attributes.class, 'rolling-stock-car');
+assert.ok(nodes['#train-layer'].children[0].children.some(child => /train-roof/.test(child.attributes.class || '')),
+  'Meitetsu running train renders rooftop details');
 advanceFrames(40);
 assert.match(nodes['#vehicle-status'].textContent, /名鉄2200系/);
 assert.equal(nodes['#vehicle-run'].disabled, true, 'only one train trial runs at once');
@@ -472,8 +476,11 @@ assert.equal(nodes['#train-layer'].children.length, 0, 'reset clears the train w
 nodes['#vehicle-model'].value = 'keio5000';
 nodes['#vehicle-model'].dispatch('change');
 assert.equal(nodes['#fleet-preview'].children.length, 10, 'Keio ten-car preview');
+assert.match(nodes['#vehicle-illustration-caption'].textContent, /京王5000系/);
 nodes['#vehicle-run'].dispatch('click');
 assert.equal(nodes['#train-layer'].children.length, 10, 'ten actual vehicle bodies are drawn');
+assert.ok(nodes['#train-layer'].children[0].children.some(child => child.attributes.class === 'train-roof-keio' || child.attributes.class === 'train-roof train-roof-keio'),
+  'Keio running train has a distinct silver roof');
 advanceFrames(1200);
 assert.equal(nodes['#vehicle-run'].disabled, false, `Keio train completes automatic service stop: ${nodes['#vehicle-status'].textContent}`);
 assert.match(nodes['#vehicle-status'].textContent, /停止/);
@@ -534,6 +541,8 @@ assert.match(nodes['#depot-status'].textContent, /名鉄2200系 6両を購入登
 assert.equal(nodes['#depot-buy'].disabled, true, 'occupied one-track depot rejects another purchase');
 assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 6);
 const depotOneCars = nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']);
+assert.ok(Math.abs(Number(depotOneCars[0].attributes.height) / Number(nodes['#depots'].children[0].children[0].children[0].attributes.height) - 2.8 / 18) < 1e-8,
+  'depot train roof is rendered at the real-world 2.8m width');
 assert.ok(Math.abs(Number(depotOneCars[0].attributes.width) /
   Number(nodes['#depots'].children[0].children[0].children[0].attributes.width) - 19 / 140) < 1e-8,
   'car drawings use 20m pitch and one-meter coupler spacing on the real-scale map');

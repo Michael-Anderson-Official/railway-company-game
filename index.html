@@ -73,7 +73,13 @@
     .track-preview path { fill: none; stroke: #3274cf; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5; }
     .track-preview .track-target { fill: #fff; stroke: #3274cf; }
     .train-layer { pointer-events: none; }
-    .train-car { stroke: #27384d; stroke-width: 1; }
+    .train-car { stroke: #536578; }
+    .train-roof { fill: #d9e2e7; stroke: #8b9ca8; }
+    .train-roof-special { fill: #f5f1ed; }
+    .train-roof-keio { fill: #cbd7e0; }
+    .train-roof-unit { fill: #9badb9; stroke: #7c8d99; }
+    .train-front-glass { fill: #203448; stroke: #96bcd0; }
+    .train-door-seam { stroke: #8f9eaa; }
     .train-window { fill: #a5cee8; opacity: .85; }
     .station-endpoints { pointer-events: none; }
     .station-endpoint { fill: #fff; stroke: #1676bc; stroke-width: 2.5; }
@@ -208,12 +214,20 @@
     .fleet-heading button { border: 0; background: transparent; color: #64758a; font-size: 25px; min-width: 34px; cursor: pointer; }
     .fleet-field { display: grid; gap: 5px; margin: 11px 0; font-size: 12px; font-weight: 700; color: #516176; }
     .fleet-field select { width: 100%; min-height: 41px; padding: 8px; border: 1px solid #cbd8eb; border-radius: 8px; background: #fff; color: #203047; font: inherit; font-size: 16px; }
-    .fleet-preview { display: flex; gap: 2px; margin: 12px 0; padding: 8px 0; overflow: hidden; }
-    .fleet-preview-car { flex: 1; min-width: 0; height: 21px; border: 1px solid #64758a; border-radius: 3px; background: #e8edf2; position: relative; }
-    .fleet-preview-car::after { content: ''; position: absolute; top: 4px; left: 12%; right: 12%; height: 6px; border-radius: 1px; background: #87b9d5; }
-    .fleet-preview-car.meitetsu-special { background: linear-gradient(#f7f7f7 65%, #cc3544 65%, #cc3544 84%, #f7f7f7 84%); }
-    .fleet-preview-car.meitetsu-general { background: linear-gradient(#f7f7f7 65%, #cc3544 65%, #cc3544 84%, #c6c9cf 84%); }
-    .fleet-preview-car.keio { background: linear-gradient(#e5eaef 66%, #d64b78 66%, #d64b78 86%, #e5eaef 86%); }
+    .vehicle-showcase { padding: 9px 10px 7px; margin-top: 11px; border: 1px solid #d4e1ed; border-radius: 12px; background: linear-gradient(#f4f9fc, #e5eef6); overflow: hidden; }
+    .vehicle-showcase svg { display: block; width: 100%; height: auto; max-height: 125px; }
+    .vehicle-illustration-caption { margin: 5px 0 0; color: #5e7084; font-size: 10px; line-height: 1.4; }
+    .fleet-preview { display: flex; gap: 3px; margin: 8px 0 9px; padding: 5px 0; overflow: hidden; }
+    .fleet-preview-car { flex: 1; min-width: 0; height: 29px; border: 1px solid #8395a5; border-radius: 3px; background: #f3f6f8; position: relative; box-shadow: inset 0 -4px #bdc8d0; }
+    .fleet-preview-car::before { content: ''; position: absolute; top: 4px; left: 7%; right: 7%; height: 10px; border-radius: 2px; background: repeating-linear-gradient(to right, #38536a 0 21%, #dfebf2 21% 26%); }
+    .fleet-preview-car::after { content: ''; position: absolute; left: 0; right: 0; top: 17px; height: 5px; background: #c73543; }
+    .fleet-preview-car.meitetsu-special { background: #fff9f5; }
+    .fleet-preview-car.meitetsu-special::before { background: repeating-linear-gradient(to right, #38536a 0 28%, #edf6fa 28% 32%); }
+    .fleet-preview-car.meitetsu-general { background: #f8f8fa; }
+    .fleet-preview-car.keio { background: #e6edf2; }
+    .fleet-preview-car.keio::after { top: 2px; height: 4px; background: #d4497b; box-shadow: 0 16px #2c5896; }
+    .fleet-preview-car.front { border-top-right-radius: 8px; border-bottom-right-radius: 9px; }
+    .fleet-preview-car.rear { border-top-left-radius: 8px; border-bottom-left-radius: 9px; }
     .fleet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; margin: 4px 0 12px; }
     .fleet-stats div { padding: 7px 9px; background: #f2f6fb; border-radius: 8px; }
     .fleet-stats dt { font-size: 10px; color: #64758a; }
@@ -486,6 +500,10 @@
             <option value="keio5000">京王5000系（2代）｜10両・200m</option>
           </select>
         </label>
+        <div class="vehicle-showcase">
+          <div id="vehicle-hero" role="img" aria-label="車両の拡大側面イラスト"></div>
+          <p id="vehicle-illustration-caption" class="vehicle-illustration-caption">車体外観の模式図</p>
+        </div>
         <div id="fleet-preview" class="fleet-preview" role="img" aria-label="編成の模式図"></div>
         <dl class="fleet-stats" id="fleet-stats"></dl>
         <p id="fleet-description" class="fleet-notes"></p>
@@ -584,6 +602,8 @@
       const vehicleRouteSelect = document.querySelector('#vehicle-route');
       const vehicleSpeedSelect = document.querySelector('#vehicle-speed');
       const vehiclePreview = document.querySelector('#fleet-preview');
+      const vehicleHero = document.querySelector('#vehicle-hero');
+      const vehicleIllustrationCaption = document.querySelector('#vehicle-illustration-caption');
       const vehicleStats = document.querySelector('#fleet-stats');
       const vehicleDescription = document.querySelector('#fleet-description');
       const vehicleRunButton = document.querySelector('#vehicle-run');
@@ -1491,12 +1511,134 @@
         return ROLLING_STOCK[vehicleModelSelect.value] || ROLLING_STOCK.meitetsu2200;
       }
 
+      function svgShape(parent, tag, attributes = {}) {
+        const element = document.createElementNS(SVG_NS, tag);
+        for (const [key, value] of Object.entries(attributes)) element.setAttribute(key, String(value));
+        parent.append(element);
+        return element;
+      }
+
+      // 実車の配色・窓扉配置・前面印象を参考に描いた独自の側面模式図（写真の転用ではない）。
+      function drawVehicleSide(vehicle) {
+        const isKeio = vehicle.id === 'keio5000';
+        const art = document.createElementNS(SVG_NS, 'svg');
+        art.setAttribute('viewBox', '0 0 444 128');
+        art.setAttribute('aria-hidden', 'true');
+        svgShape(art, 'path', { d: 'M 18 102 H 428', fill: 'none', stroke: '#748b9d', 'stroke-width': 2 });
+        for (const center of [90, 352]) {
+          svgShape(art, 'rect', { x: center - 33, y: 90, width: 66, height: 16, rx: 4, fill: '#465c69' });
+          for (const wheelX of [center - 24, center + 24]) {
+            svgShape(art, 'circle', { cx: wheelX, cy: 103, r: 11, fill: '#304352', stroke: '#879ba6', 'stroke-width': 2 });
+            svgShape(art, 'circle', { cx: wheelX, cy: 103, r: 4, fill: '#9aabb6' });
+          }
+        }
+        svgShape(art, 'path', {
+          d: 'M 19 30 Q 19 23 27 23 H 381 Q 408 23 418 45 L 427 75 Q 422 90 406 92 H 27 Q 19 92 19 84 Z',
+          fill: isKeio ? '#e5edf1' : '#fcfbfa', stroke: '#8295a3', 'stroke-width': 2
+        });
+        svgShape(art, 'path', { d: 'M 24 29 H 374 Q 395 29 403 41 H 24 Z',
+          fill: isKeio ? '#d4dfe6' : '#f2ede9' });
+        if (isKeio) {
+          svgShape(art, 'path', { d: 'M 25 30 H 376 Q 397 30 405 44', fill: 'none', stroke: '#d34779', 'stroke-width': 6 });
+          svgShape(art, 'rect', { x: 19, y: 76, width: 384, height: 6, fill: '#32619e' });
+          svgShape(art, 'path', { d: 'M 386 30 Q 407 31 418 50 L 427 75 Q 418 90 395 92 L 392 71 Q 400 59 395 47 Z', fill: '#253443' });
+          svgShape(art, 'path', { d: 'M 392 80 L 427 75 Q 418 90 396 92 Z', fill: '#d44978' });
+        } else {
+          svgShape(art, 'path', { d: 'M 20 71 H 389 Q 409 71 423 78 L 419 85 H 20 Z', fill: '#cc3644' });
+          svgShape(art, 'path', { d: 'M 390 34 Q 406 34 418 51 L 423 75 H 392 Z', fill: '#263947' });
+          svgShape(art, 'path', { d: 'M 401 77 H 423 L 419 85 H 401 Z', fill: '#dd3746' });
+        }
+        const doorXs = isKeio ? [98, 215, 331] : [111];
+        const windowXs = isKeio ? [42, 130, 169, 247, 285, 363] : [36, 66, 147, 184, 220, 258, 296, 330];
+        for (const x of windowXs) {
+          const width = isKeio ? 26 : 24;
+          if (doorXs.some(door => x > door - 25 && x < door + 24)) continue;
+          svgShape(art, 'rect', { x, y: 41, width, height: 23, rx: 3,
+            fill: '#29495e', stroke: '#afcad9', 'stroke-width': 1.2 });
+          svgShape(art, 'path', { d: `M ${x + 3} 44 L ${x + width - 5} 44 L ${x + 6} 60`,
+            fill: 'none', stroke: '#8caabb', 'stroke-width': 1, opacity: .65 });
+        }
+        for (const x of doorXs) {
+          svgShape(art, 'rect', { x, y: 37, width: 29, height: 50, rx: 2,
+            fill: isKeio ? '#dce6ed' : '#fafafa', stroke: '#91a1af', 'stroke-width': 1.5 });
+          for (const dx of [4, 17]) {
+            svgShape(art, 'rect', { x: x + dx, y: 42, width: 9, height: 21, rx: 2,
+              fill: '#34556b' });
+          }
+          svgShape(art, 'path', { d: `M ${x + 14.5} 39 V 85`, stroke: '#9baab4', 'stroke-width': .9 });
+        }
+        svgShape(art, 'path', { d: 'M 391 43 Q 403 41 412 53 L 416 64 H 395 Z',
+          fill: '#182b3b', stroke: '#9db5c5', 'stroke-width': 1.5 });
+        svgShape(art, 'rect', { x: 399, y: 37, width: 14, height: 5, rx: 1, fill: '#263647' });
+        svgShape(art, 'path', { d: 'M 412 65 L 420 69', stroke: '#f5ebde', 'stroke-width': 4, 'stroke-linecap': 'round' });
+        svgShape(art, 'path', { d: 'M 19 91 H 400', stroke: '#8c99a1', 'stroke-width': 2 });
+        const marking = svgShape(art, 'text', { x: 38, y: 87, fill: '#526577', 'font-size': 9, 'font-weight': 700 });
+        marking.textContent = isKeio ? 'KEIO 5000' : 'MEITETSU 2200';
+        return art;
+      }
+
+      // 地図と車両基地で共通の屋根上ビュー。地図モードでは20m×約2.8mの寸法を維持する。
+      function paintTopDownCar(parent, vehicle, index, x, y, width, height, unit) {
+        const isKeio = vehicle.id === 'keio5000';
+        const special = vehicle.carTypes[index] === 'meitetsu-special';
+        const topLine = isKeio ? '#ce4778' : '#ca3543';
+        const lowerLine = isKeio ? '#315b92' : '#ca3543';
+        const thin = Math.max(height * .09, unit * .12);
+        svgShape(parent, 'rect', { x: x + unit * .45, y: y + height * .07,
+          width: width - unit * .9, height: thin, rx: thin / 3, fill: topLine });
+        svgShape(parent, 'rect', { x: x + unit * .45, y: y + height - thin - height * .07,
+          width: width - unit * .9, height: thin, rx: thin / 3, fill: lowerLine });
+        svgShape(parent, 'rect', { class: `train-roof${special ? ' train-roof-special' : isKeio ? ' train-roof-keio' : ''}`,
+          x: x + unit * 1.6, y: y + height * .24,
+          width: width - unit * 3.2, height: height * .52, rx: height * .09,
+          'stroke-width': unit * .07 });
+        const windows = special ? 6 : isKeio ? 7 : 6;
+        for (let i = 0; i < windows; i++) {
+          const xPos = x + unit * 2.2 + (width - unit * 4.4) * (i + .14) / windows;
+          const windowWidth = (width - unit * 4.4) * .57 / windows;
+          for (const yPos of [y + height * .125, y + height * .765]) {
+            svgShape(parent, 'rect', { x: xPos, y: yPos, width: windowWidth,
+              height: height * .1, rx: height * .02, fill: '#39536a' });
+          }
+        }
+        if (!special) {
+          for (const step of [.27, .5, .73]) {
+            const seamX = x + width * step;
+            svgShape(parent, 'path', { class: 'train-door-seam',
+              d: `M ${seamX} ${y + height * .06} V ${y + height * .21} M ${seamX} ${y + height * .79} V ${y + height * .94}`,
+              fill: 'none', 'stroke-width': unit * .08 });
+          }
+        }
+        const vents = index === 0 || index === vehicle.cars - 1 ? [0.43, 0.63] : [0.31, 0.68];
+        for (const at of vents) {
+          svgShape(parent, 'rect', { class: 'train-roof-unit', x: x + width * at - unit * 1.15,
+            y: y + height * .38, width: unit * 2.3, height: height * .23,
+            rx: unit * .25, 'stroke-width': unit * .06 });
+        }
+        for (const end of [0, vehicle.cars - 1]) {
+          if (index !== end) continue;
+          const right = end === 0;
+          const cabX = right ? x + width - unit * 1.5 : x + unit * .35;
+          svgShape(parent, 'rect', { class: 'train-front-glass', x: cabX, y: y + height * .22,
+            width: unit * 1.15, height: height * .56, rx: unit * .4,
+            'stroke-width': unit * .08 });
+          svgShape(parent, 'rect', { x: right ? x + width - unit * .37 : x + unit * .13,
+            y: y + height * .35, width: unit * .21, height: height * .3,
+            fill: isKeio ? '#d64a79' : '#d03d46' });
+        }
+      }
+
       function renderVehicleCatalog() {
         const vehicle = selectedVehicle();
+        vehicleHero.replaceChildren(drawVehicleSide(vehicle));
+        vehicleIllustrationCaption.textContent = vehicle.id === 'keio5000'
+          ? '京王5000系｜黒い前面・京王レッド＆ブルーの帯（側面模式図）'
+          : '名鉄2200系｜特別車の窓配置・スカーレットの帯（側面模式図）';
         vehiclePreview.setAttribute('aria-label', `${vehicle.name}・${vehicle.cars}両編成（1両20m）`);
-        vehiclePreview.replaceChildren(...vehicle.carTypes.map(type => {
+        vehiclePreview.replaceChildren(...vehicle.carTypes.map((type, index) => {
           const car = document.createElement('span');
-          car.setAttribute('class', `fleet-preview-car ${type}`);
+          car.setAttribute('class', `fleet-preview-car ${type}${index === 0 ? ' front' : ''}${index === vehicle.cars - 1 ? ' rear' : ''}`);
+          car.setAttribute('title', `${index + 1}号車：${type === 'meitetsu-special' ? '特別車' : type === 'meitetsu-general' ? '一般車' : '京王5000系'}`);
           return car;
         }));
         const specs = [
@@ -1623,29 +1765,19 @@
           car.setAttribute('data-car-number', String(index + 1));
           car.setAttribute('transform', `translate(${center.x} ${center.y}) rotate(${center.heading})`);
           const width = CAR_LENGTH_METERS * route.scale - 1 * route.scale;
-          const height = (mapMode === 'blank' ? 16 : 2.8 * route.scale);
+          const height = (mapMode === 'blank' ? 7 : 2.8 * route.scale);
+          const unit = mapMode === 'blank' ? height / 2.8 : route.scale;
           const body = document.createElementNS(SVG_NS, 'rect');
           body.setAttribute('class', 'train-car');
           body.setAttribute('x', String(-width / 2));
           body.setAttribute('y', String(-height / 2));
           body.setAttribute('width', String(width));
           body.setAttribute('height', String(height));
-          body.setAttribute('rx', String(Math.min(height / 4, 2.5 * route.scale)));
-          body.setAttribute('stroke-width', String(mapMode === 'blank' ? 1.4 : .35 * route.scale));
-          body.setAttribute('fill', vehicle.id === 'keio5000' ? '#e0e8f0' : '#f7f7f8');
-          const band = document.createElementNS(SVG_NS, 'rect');
-          band.setAttribute('x', String(-width / 2));
-          band.setAttribute('y', String(height * .07));
-          band.setAttribute('width', String(width));
-          band.setAttribute('height', String(Math.max(.45 * route.scale, height * .2)));
-          band.setAttribute('fill', vehicle.id === 'keio5000' ? '#d94f7b' : '#c83b47');
-          const glass = document.createElementNS(SVG_NS, 'rect');
-          glass.setAttribute('class', 'train-window');
-          glass.setAttribute('x', String(-width * .38));
-          glass.setAttribute('y', String(-height * .34));
-          glass.setAttribute('width', String(width * .76));
-          glass.setAttribute('height', String(height * .24));
-          car.append(body, band, glass);
+          body.setAttribute('rx', String(Math.min(height * .25, unit * .8)));
+          body.setAttribute('stroke-width', String(unit * .2));
+          body.setAttribute('fill', vehicle.id === 'keio5000' ? '#e5edf2' : vehicle.carTypes[index] === 'meitetsu-special' ? '#fffbf7' : '#f8f9fa');
+          car.append(body);
+          paintTopDownCar(car, vehicle, index, -width / 2, -height / 2, width, height, unit);
           cars.push(car);
         }
         trainLayer.replaceChildren(...cars);
@@ -1987,24 +2119,21 @@
         const stock = ROLLING_STOCK[depot?.vehicleId];
         if (stock) {
           for (let carIndex = 0; carIndex < stock.cars; carIndex++) {
+            const carX = (-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters;
+            const carWidth = (CAR_LENGTH_METERS - 1) * meters;
+            const carHeight = 2.8 * meters;
             const car = document.createElementNS(SVG_NS, 'rect');
             car.setAttribute('class', 'depot-car');
             car.setAttribute('data-depot-car', String(carIndex + 1));
-            car.setAttribute('x', String((-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters));
-            car.setAttribute('y', String(-3.7 * meters));
-            car.setAttribute('width', String((CAR_LENGTH_METERS - 1) * meters));
-            car.setAttribute('height', String(7.4 * meters));
+            car.setAttribute('x', String(carX));
+            car.setAttribute('y', String(-carHeight / 2));
+            car.setAttribute('width', String(carWidth));
+            car.setAttribute('height', String(carHeight));
             car.setAttribute('rx', String(.8 * meters));
-            car.setAttribute('stroke-width', String(.45 * meters));
-            car.setAttribute('fill', stock.id === 'keio5000' ? '#e7ecf4' : '#fff7f7');
+            car.setAttribute('stroke-width', String(.2 * meters));
+            car.setAttribute('fill', stock.id === 'keio5000' ? '#e5edf2' : stock.carTypes[carIndex] === 'meitetsu-special' ? '#fffbf7' : '#f8f9fa');
             diagram.append(car);
-            const stripe = document.createElementNS(SVG_NS, 'rect');
-            stripe.setAttribute('x', String((-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters));
-            stripe.setAttribute('y', String(1.3 * meters));
-            stripe.setAttribute('width', String((CAR_LENGTH_METERS - 1) * meters));
-            stripe.setAttribute('height', String(1.4 * meters));
-            stripe.setAttribute('fill', stock.id === 'keio5000' ? '#d94f7b' : '#c83b47');
-            diagram.append(stripe);
+            paintTopDownCar(diagram, stock, carIndex, carX, -carHeight / 2, carWidth, carHeight, meters);
           }
         }
         if (depot) {
