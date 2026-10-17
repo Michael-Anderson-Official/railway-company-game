@@ -105,11 +105,12 @@
       stroke: #fff; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke;
     }
     .station-item { cursor: grab; }
-    .depot-item { cursor: pointer; }
+    .depot-item { cursor: grab; }
     .depot-shed { fill: #e8f1f4; fill-opacity: .85; stroke: #6495a3; }
     .depot-item.selected .depot-shed { stroke: #2158a3; fill: #e0efff; }
     .depot-rail { fill: none; stroke: #374b55; stroke-linecap: round; }
     .depot-buffer { stroke: #374b55; stroke-linecap: round; }
+    .depot-throat { fill: #e5f6ff; stroke: #3984bb; }
     .depot-car { stroke: #52657b; }
     .depot-name { fill: #176079; font-size: 14px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
     .depot-hit { fill: transparent; pointer-events: all; }
@@ -280,6 +281,8 @@
     .route-list-item small { display: block; margin-top: 4px; color: #63758a; line-height: 1.45; font-size: 11px; }
     .route-manager-note { margin-top: 9px; font-size: 11px; line-height: 1.5; color: #687c90; }
     .depot-info { margin: 10px 0; padding: 10px; border-radius: 9px; background: #f0f7f9; color: #285466; font-size: 12px; line-height: 1.6; }
+    .depot-guidance { margin: 0 0 9px; color: #536c84; font-size: 11px; line-height: 1.5; }
+    .depot-panel .editor-rotation { margin: 0 0 11px; }
     .depot-buy { width: 100%; min-height: 46px; padding: 8px; background: #2158a3; color: #fff; border: 0; border-radius: 9px; font-size: 14px; font-weight: 800; cursor: pointer; }
     .depot-buy:disabled { background: #aab6c2; cursor: not-allowed; }
     .depot-status { min-height: 19px; margin: 9px 0; color: #194c89; font-size: 12px; line-height: 1.5; font-weight: 750; }
@@ -537,17 +540,17 @@
         <div class="track-fields">
           <div class="track-field origin-field">
             <label for="track-origin">接続する線路端</label>
-            <select id="track-origin" aria-label="接続する駅の線路端"></select>
+            <select id="track-origin" aria-label="接続する駅・車両基地の線路端"></select>
           </div>
           <div class="track-field origin-field">
             <label for="track-route">敷設する路線</label>
             <select id="track-route" aria-label="複線の所属路線"></select>
           </div>
         </div>
-        <p class="track-note" id="track-destination">接続先の駅の上端・下端をタップしてください。駅以外の場所も終点にできます。</p>
+        <p class="track-note" id="track-destination">接続先の駅端・車両基地の出入口をタップしてください。空いた場所も終点にできます。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">1番線＝上り方面・2番線＝下り方面です。駅端にX字型渡り線を設置します。路線を設定すると敷設区間にその路線を紐づけます。ポイント切替・営業ダイヤ運行は未実装です。ドラッグは地図移動、2本指は拡大縮小。</p>
+        <p class="track-note">1番線＝上り方面・2番線＝下り方面。駅端にはX字渡り線、1線の車両基地には片側だけの分岐を設置します。ポイント切替・営業ダイヤ運行は未実装。ドラッグで地図移動、2本指で拡大縮小。</p>
       </div>
       <aside class="route-manager" id="route-manager" aria-label="路線の作成と編集" hidden>
         <div class="route-manager-heading"><h2>路線の設定</h2><button id="route-close" type="button" aria-label="路線設定を閉じる">×</button></div>
@@ -605,6 +608,12 @@
           <button id="depot-close" type="button" aria-label="車両基地を閉じる">×</button>
         </div>
         <p id="depot-info" class="depot-info">留置線1線・選択した両数の編成に対応</p>
+        <p class="depot-guidance" id="depot-guidance">車両基地をドラッグで移動・紫の↻で自由回転。線路は出入口1か所だけ接続できます。</p>
+        <div class="editor-rotation">
+          <label for="depot-angle">角度</label>
+          <input id="depot-angle" type="range" min="0" max="359.9" step="0.1" value="90" aria-label="車両基地の回転角度">
+          <output id="depot-angle-value" for="depot-angle">90.0°</output>
+        </div>
         <label class="fleet-field" for="depot-vehicle">購入する車両
           <select id="depot-vehicle" aria-label="車両基地で購入する車両">
             <option value="meitetsu2200">名鉄2200系・6両（120m）</option>
@@ -614,13 +623,13 @@
         <button id="depot-buy" class="depot-buy" type="button">この基地に1編成を購入</button>
         <p id="depot-status" class="depot-status" role="status" aria-live="polite"></p>
         <p id="depot-owned" class="fleet-notes"></p>
-        <p class="fleet-notes">※設定した両数×20mが留置有効長です（線路両端に各10mの余長）。価格・所持金は未設定のため、今回は購入登録（納入）のみ行います。1線に1編成まで。基地から本線への接続と営業運用は今後対応します。</p>
+        <p class="fleet-notes">※設定した両数×20mが留置有効長です（車止め側と出入口側に各10mの余長）。価格・所持金は未設定のため、購入登録のみです。1線に1編成まで。線路との接続は可能ですが、列車の入出庫運行は未実装です。</p>
       </aside>
       <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
         <div class="connection-panel">
           <h2 id="connection-question"></h2>
-          <p id="connection-detail">駅の線路端まで複線を自動接続します。</p>
+          <p id="connection-detail">選択した線路端まで自動接続します。</p>
           <div class="connection-actions">
             <button id="connection-cancel" type="button">キャンセル</button>
             <button id="connection-confirm" class="confirm" type="button">接続する</button>
@@ -666,6 +675,9 @@
       const depotBuyButton = document.querySelector('#depot-buy');
       const depotStatus = document.querySelector('#depot-status');
       const depotOwned = document.querySelector('#depot-owned');
+      const depotAngle = document.querySelector('#depot-angle');
+      const depotAngleValue = document.querySelector('#depot-angle-value');
+      const depotGuidance = document.querySelector('#depot-guidance');
       const fleetButton = document.querySelector('#fleet-tool');
       const routeButton = document.querySelector('#route-tool');
       const routeManager = document.querySelector('#route-manager');
@@ -836,6 +848,8 @@
       let nextUnitId = 1;
       let selectedDepotId = null;
       let pendingDepotTap = null;
+      let depotDragStart = null;
+      let depotRotationDragStart = null;
       const trackSections = [];
       let vehicleRun = null;
       let vehicleFrameId = null;
@@ -1217,7 +1231,13 @@
       function stationHasRailConnection(id) {
         return trackSections.some(section =>
           (section.source.type === 'station' && section.source.stationId === id) ||
-          section.targetStation?.stationId === id);
+          (section.targetStation?.type === 'station' && section.targetStation.stationId === id));
+      }
+
+      function depotHasRailConnection(id) {
+        return trackSections.some(section =>
+          (section.source.type === 'depot' && section.source.depotId === id) ||
+          (section.targetStation?.type === 'depot' && section.targetStation.depotId === id));
       }
 
       function currentTrackGeometry() {
@@ -1248,6 +1268,17 @@
           const last = parent.points[parent.points.length - 1];
           return { x: last.x, y: last.y, heading: last.heading, spacing: parent.endSpacing,
             scale: parent.scale, stationId: parent.stationId, stationSource: false };
+        }
+        if (source.type === 'depot') {
+          const depot = depots.find(item => item.id === source.depotId && isOnCurrentLevel(item));
+          if (!depot) return null;
+          const center = depotCanvasCenter(depot);
+          const scale = mapMode === 'kariya' ? canvasUnitsPerMeter(depot.lat) : DEPOT_BLANK_UNITS_PER_METER;
+          const end = (depot.carCount * CAR_LENGTH_METERS / 2 + DEPOT_END_BUFFER_METERS) * scale;
+          const heading = normalDegrees(depot.rotation ?? DEFAULT_STATION_ROTATION);
+          const radians = heading * Math.PI / 180;
+          return { x: center.x + Math.cos(radians) * end, y: center.y + Math.sin(radians) * end,
+            heading, scale, spacing: 0, depotId: depot.id, stationId: null, stationSource: true };
         }
         const station = positions.find(position => position.id === source.stationId && isOnCurrentLevel(position));
         if (!station) return null;
@@ -1547,16 +1578,21 @@
 
       function validateTrack(source, target, geometries, targetStation = null) {
         const origin = resolveTrackOrigin(source, geometries);
-        if (!origin) return { error: '駅につながる線路端を選択してください' };
+        if (!origin) return { error: '駅・車両基地につながる線路端を選択してください' };
         if (!target && !targetStation) return { error: '地図上で行き先をタップしてください' };
         if (targetStation) {
-          const station = positions.find(item => item.id === targetStation.stationId && isOnCurrentLevel(item));
-          if (!station) return { error: '同じ階層の駅にのみ接続できます' };
-          if (origin.stationId === station.id) return { error: '同じ駅の両端同士は接続できません' };
+          const station = targetStation.type === 'station'
+            ? positions.find(item => item.id === targetStation.stationId && isOnCurrentLevel(item)) : null;
+          const depot = targetStation.type === 'depot'
+            ? depots.find(item => item.id === targetStation.depotId && isOnCurrentLevel(item)) : null;
+          if (!station && !depot) return { error: '同じ階層の駅・車両基地にのみ接続できます' };
+          if (source.type === 'station' && station?.id === source.stationId) return { error: '同じ駅の両端同士は接続できません' };
+          if (source.type === 'depot' && depot?.id === source.depotId) return { error: '同じ車両基地には接続できません' };
           if (trackSections.filter(isOnCurrentLevel).some(section =>
             trackOriginKey(section.source) === trackOriginKey(targetStation) ||
             (section.targetStation && trackOriginKey(section.targetStation) === trackOriginKey(targetStation)))) {
-            return { error: `${station.name}の${stationSideLabel(targetStation.side)}には既に線路が接続されています` };
+            return { error: station ? `${station.name}の${stationSideLabel(targetStation.side)}には既に線路が接続されています`
+              : `車両基地${depot.id}の出入口には既に線路が接続されています（接続は片側1か所のみ）` };
           }
         }
         const end = targetStation && resolveTrackOrigin(targetStation, geometries);
@@ -1608,11 +1644,32 @@
             }
           }
         }
+        for (const depot of depots.filter(isOnCurrentLevel)) {
+          const center = depotCanvasCenter(depot);
+          const scale = mapMode === 'kariya' ? canvasUnitsPerMeter(depot.lat) : DEPOT_BLANK_UNITS_PER_METER;
+          const halfLength = (depot.carCount * CAR_LENGTH_METERS / 2 + DEPOT_END_BUFFER_METERS) * scale;
+          const halfWidth = 9 * scale;
+          const radians = (depot.rotation ?? DEFAULT_STATION_ROTATION) * Math.PI / 180;
+          for (const point of candidate.points) {
+            if (source.type === 'depot' && source.depotId === depot.id && point.distance <= 15) continue;
+            if (targetStation?.type === 'depot' && targetStation.depotId === depot.id &&
+                candidate.lengthMeters - point.distance <= 15) continue;
+            const dx = point.x - center.x;
+            const dy = point.y - center.y;
+            const localX = dx * Math.cos(radians) + dy * Math.sin(radians);
+            const localY = -dx * Math.sin(radians) + dy * Math.cos(radians);
+            if (Math.abs(localX) < halfLength + 3 * scale && Math.abs(localY) < halfWidth + 3 * scale) {
+              return { error: '車両基地の留置線・建屋を横切る線路は敷設できません' };
+            }
+          }
+        }
         return calculated;
       }
 
       function trackOriginKey(source) {
-        return source.type === 'station' ? `station:${source.stationId}:${source.side}` : `section:${source.sectionId}`;
+        if (source.type === 'station') return `station:${source.stationId}:${source.side}`;
+        if (source.type === 'depot') return `depot:${source.depotId}`;
+        return `section:${source.sectionId}`;
       }
 
       function stationSideLabel(side) { return side === -1 ? '上り側' : '下り側'; }
@@ -1624,7 +1681,7 @@
           occupied.add(trackOriginKey(section.source));
           if (section.targetStation) occupied.add(trackOriginKey(section.targetStation));
         }
-        return positions.filter(isOnCurrentLevel).flatMap(station => [-1, 1].map(side => {
+        const stationHandles = positions.filter(isOnCurrentLevel).flatMap(station => [-1, 1].map(side => {
           const source = { type: 'station', stationId: station.id, side };
           const endpoint = resolveTrackOrigin(source, new Map());
           const center = stationCanvasCenter(station);
@@ -1633,6 +1690,16 @@
           return { source, station, endpoint, occupied: occupied.has(trackOriginKey(source)),
             marker: { x: center.x + Math.cos(heading) * offset, y: center.y + Math.sin(heading) * offset } };
         }));
+        const depotHandles = depots.filter(isOnCurrentLevel).map(depot => {
+          const source = { type: 'depot', depotId: depot.id };
+          const endpoint = resolveTrackOrigin(source, new Map());
+          const center = depotCanvasCenter(depot);
+          const radians = endpoint.heading * Math.PI / 180;
+          const offset = Math.max(Math.hypot(endpoint.x - center.x, endpoint.y - center.y), 30 / zoom);
+          return { source, depot, endpoint, occupied: occupied.has(trackOriginKey(source)),
+            marker: { x: center.x + Math.cos(radians) * offset, y: center.y + Math.sin(radians) * offset } };
+        });
+        return [...stationHandles, ...depotHandles];
       }
 
       function renderStationEndpoints() {
@@ -1641,7 +1708,8 @@
         const markers = stationEndpointHandles().map(handle => {
           const g = document.createElementNS(SVG_NS, 'g');
           g.setAttribute('transform', `translate(${handle.marker.x} ${handle.marker.y}) scale(${1 / zoom})`);
-          g.setAttribute('aria-label', `${handle.station.name} ${stationSideLabel(handle.source.side)}${handle.occupied ? '（接続済み）' : '（タップで接続）'}`);
+          const facility = handle.depot ? `車両基地${handle.depot.id} 出入口` : `${handle.station.name} ${stationSideLabel(handle.source.side)}`;
+          g.setAttribute('aria-label', `${facility}${handle.occupied ? '（接続済み）' : '（タップで接続）'}`);
           const circle = document.createElementNS(SVG_NS, 'circle');
           circle.setAttribute('class', `station-endpoint${handle.occupied ? ' occupied' : ''}`);
           circle.setAttribute('r', '14');
@@ -1650,7 +1718,7 @@
           const label = document.createElementNS(SVG_NS, 'text');
           label.setAttribute('class', 'station-endpoint-label');
           label.setAttribute('y', '-20');
-          label.textContent = handle.source.side === -1 ? '上り' : '下り';
+          label.textContent = handle.depot ? '出入口' : handle.source.side === -1 ? '上り' : '下り';
           g.append(label);
           return g;
         });
@@ -1670,6 +1738,11 @@
             const key = trackOriginKey(source);
             if (!occupied.has(key)) availableTrackOrigins.push({ key, source, label: `${station.name} ${stationSideLabel(side)}` });
           }
+        }
+        for (const depot of depots.filter(isOnCurrentLevel)) {
+          const source = { type: 'depot', depotId: depot.id };
+          const key = trackOriginKey(source);
+          if (!occupied.has(key)) availableTrackOrigins.push({ key, source, label: `車両基地${depot.id} 出入口（1線）` });
         }
         for (const section of trackSections.filter(isOnCurrentLevel)) {
           if (section.targetStation) continue; // 駅まで接続済みの先端から分岐させない
@@ -1744,13 +1817,18 @@
 
       function openConnectionDialog() {
         if (!trackTargetStation || trackBuildButton.disabled) return;
-        const target = positions.find(position => position.id === trackTargetStation.stationId && isOnCurrentLevel(position));
-        if (!target) return;
+        const station = trackTargetStation.type === 'station'
+          ? positions.find(position => position.id === trackTargetStation.stationId && isOnCurrentLevel(position)) : null;
+        const depot = trackTargetStation.type === 'depot'
+          ? depots.find(item => item.id === trackTargetStation.depotId && isOnCurrentLevel(item)) : null;
+        if (!station && !depot) return;
         const calculation = validateTrack(availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value)?.source,
           trackDestination, currentTrackGeometry(), trackTargetStation);
         if (calculation.error) { renderTrackPreview(); return; }
-        connectionQuestion.textContent = `${target.name}の${stationSideLabel(trackTargetStation.side)}に接続しますか？`;
-        connectionDetail.textContent = `${floorLabel()}・複線 約${Math.round(calculation.lengthMeters).toLocaleString('ja-JP')}m。駅の端まで自動で接続します。`;
+        connectionQuestion.textContent = station
+          ? `${station.name}の${stationSideLabel(trackTargetStation.side)}に接続しますか？`
+          : `車両基地${depot.id}の出入口に接続しますか？`;
+        connectionDetail.textContent = `${floorLabel()}・複線 約${Math.round(calculation.lengthMeters).toLocaleString('ja-JP')}m。${station ? '駅端のX字渡り線' : '車両基地の片側1線への分岐'}まで自動接続します。`;
         connectionDialog.hidden = false;
         connectionConfirm.focus?.();
       }
@@ -1761,17 +1839,17 @@
         const selected = availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value);
         if (!selected) {
           trackBuildButton.disabled = true;
-          trackValidation.textContent = '先に1面2線の駅を配置してください';
+          trackValidation.textContent = '先に駅または車両基地を配置してください';
           trackValidation.classList.toggle('invalid', true);
-          trackDestinationInfo.textContent = '駅の配置後、地図上の行き先をタップしてください。';
+          trackDestinationInfo.textContent = '駅・車両基地の配置後、行き先をタップしてください。';
           return;
         }
         const result = validateTrack(selected.source, trackDestination, currentTrackGeometry(), trackTargetStation);
         trackBuildButton.disabled = !!result.error;
         trackValidation.textContent = result.error || '敷設できます。青いプレビューを確認してください';
         trackValidation.classList.toggle('invalid', !!result.error && !!trackDestination);
-        trackDestinationInfo.textContent = !trackDestination ? '接続先の駅端をタップ（丸いマーカー）。地図上の好きな場所も指定できます。'
-          : result.geometry ? `${trackTargetStation ? '駅への接続' : '自動計算'}：延長 約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}m・滑らかな曲線で接続`
+        trackDestinationInfo.textContent = !trackDestination ? '接続先の駅端・車両基地の出入口をタップ（丸いマーカー）。空いた場所も指定できます。'
+          : result.geometry ? `${trackTargetStation ? '設備への接続' : '自動計算'}：延長 約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}m・滑らかな曲線で接続`
             : '終点を選択中です。タップし直して変更できます。';
         if (!result.error) trackPreview.replaceChildren(createDoubleTrack(result.geometry, true));
       }
@@ -2389,40 +2467,44 @@
         return group;
       }
 
-      // 1線の留置線。有効長は2〜16両×20m、両端に各10mの余長を設ける。
+      // 頭端式の1線留置線。local -Xは車止め、+Xは線路を接続できる出入口。
       function createDepot(x, y, city, latitude, depot = null) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('transform', `translate(${x} ${y})`);
         group.setAttribute('class', `depot-item${depot?.id === selectedDepotId ? ' selected' : ''}`);
         if (depot) {
           group.setAttribute('data-depot-id', String(depot.id));
-          group.setAttribute('aria-label', `車両基地${depot.id}／${floorLabel(depot.level)}／留置線1線${depot.carCount}両対応・有効長${depot.carCount * CAR_LENGTH_METERS}m／${depot.vehicleId ? ROLLING_STOCK[depot.vehicleId].name + 'を留置中' : '空線・タップして車両を購入'}`);
+          group.setAttribute('aria-label', `車両基地${depot.id}／${floorLabel(depot.level)}／頭端式1線${depot.carCount}両対応・有効長${depot.carCount * CAR_LENGTH_METERS}m／${depot.vehicleId ? ROLLING_STOCK[depot.vehicleId].name + 'を留置中' : '空線・タップして車両を購入'}／出入口は片側だけ`);
         }
         const meters = city ? canvasUnitsPerMeter(latitude) : DEPOT_BLANK_UNITS_PER_METER;
         const carCount = depot?.carCount || selectedCars;
         const width = (carCount * CAR_LENGTH_METERS + 2 * DEPOT_END_BUFFER_METERS) * meters;
         const diagram = document.createElementNS(SVG_NS, 'g');
-        diagram.setAttribute('transform', 'rotate(90)');
+        const rotation = depot?.rotation ?? DEFAULT_STATION_ROTATION;
+        diagram.setAttribute('transform', `rotate(${rotation})`);
         const shed = document.createElementNS(SVG_NS, 'rect');
         shed.setAttribute('class', 'depot-shed');
-        for (const [key, value] of Object.entries({ x: -width / 2, y: -9 * meters, width, height: 18 * meters,
+        for (const [key, value] of Object.entries({ x: -width / 2, y: -9 * meters, width: width - 11 * meters, height: 18 * meters,
           rx: 2 * meters, 'stroke-width': .7 * meters })) shed.setAttribute(key, String(value));
         diagram.append(shed);
+        const throat = document.createElementNS(SVG_NS, 'rect');
+        throat.setAttribute('class', 'depot-throat');
+        for (const [key, value] of Object.entries({ x: width / 2 - 11 * meters, y: -5 * meters,
+          width: 11 * meters, height: 10 * meters, rx: 1.4 * meters, 'stroke-width': .55 * meters })) throat.setAttribute(key, String(value));
+        diagram.append(throat);
         const rail = document.createElementNS(SVG_NS, 'path');
         rail.setAttribute('class', 'depot-rail');
         rail.setAttribute('stroke-width', String(1.4 * meters));
         rail.setAttribute('d', `M ${-width / 2} 0 H ${width / 2}`);
         diagram.append(rail);
-        for (const end of [-1, 1]) {
-          const buffer = document.createElementNS(SVG_NS, 'line');
-          buffer.setAttribute('class', 'depot-buffer');
-          buffer.setAttribute('stroke-width', String(2 * meters));
-          buffer.setAttribute('x1', String(end * width / 2));
-          buffer.setAttribute('x2', String(end * width / 2));
-          buffer.setAttribute('y1', String(-5 * meters));
-          buffer.setAttribute('y2', String(5 * meters));
-          diagram.append(buffer);
-        }
+        const buffer = document.createElementNS(SVG_NS, 'line');
+        buffer.setAttribute('class', 'depot-buffer');
+        buffer.setAttribute('stroke-width', String(2 * meters));
+        buffer.setAttribute('x1', String(-width / 2));
+        buffer.setAttribute('x2', String(-width / 2));
+        buffer.setAttribute('y1', String(-5 * meters));
+        buffer.setAttribute('y2', String(5 * meters));
+        diagram.append(buffer);
         const stock = ROLLING_STOCK[depot?.vehicleId];
         if (stock) {
           for (let carIndex = 0; carIndex < stock.cars; carIndex++) {
@@ -2460,6 +2542,34 @@
         label.setAttribute('transform', `translate(0 ${-30 / zoom}) scale(${1 / zoom})`);
         label.textContent = depot ? `車両基地${depot.id} · 1線 · ${carCount}両対応` : `車両基地 · ${carCount}両対応`;
         group.append(label);
+        if (depot && depot.id === selectedDepotId && !layingTrack) {
+          const radians = rotation * Math.PI / 180;
+          const handleX = Math.cos(radians) * 60 / zoom;
+          const handleY = Math.sin(radians) * 60 / zoom;
+          const guide = document.createElementNS(SVG_NS, 'line');
+          guide.setAttribute('class', 'rotation-guide');
+          for (const [key, value] of Object.entries({ x1: 0, y1: 0, x2: handleX, y2: handleY,
+            'stroke-width': 1.5 / zoom, 'stroke-dasharray': `${4 / zoom} ${3 / zoom}` })) guide.setAttribute(key, String(value));
+          group.append(guide);
+          const grip = document.createElementNS(SVG_NS, 'g');
+          grip.setAttribute('class', 'rotation-grip');
+          grip.setAttribute('data-rotate-depot-id', String(depot.id));
+          grip.setAttribute('aria-label', 'ドラッグして車両基地を自由に回転');
+          grip.setAttribute('transform', `translate(${handleX} ${handleY}) scale(${1 / zoom})`);
+          const touchCircle = document.createElementNS(SVG_NS, 'circle');
+          touchCircle.setAttribute('class', 'rotation-touch');
+          touchCircle.setAttribute('r', '24');
+          grip.append(touchCircle);
+          const knob = document.createElementNS(SVG_NS, 'circle');
+          knob.setAttribute('class', 'rotation-knob');
+          knob.setAttribute('r', '17');
+          grip.append(knob);
+          const symbol = document.createElementNS(SVG_NS, 'text');
+          symbol.setAttribute('class', 'rotation-symbol');
+          symbol.textContent = '↻';
+          grip.append(symbol);
+          group.append(grip);
+        }
         return group;
       }
 
@@ -2482,9 +2592,16 @@
         const capacity = depot.carCount * CAR_LENGTH_METERS;
         const proposed = ROLLING_STOCK[depotVehicleSelect.value];
         const tooLong = proposed && proposed.cars > depot.carCount;
+        const connected = depotHasRailConnection(depot.id);
         depotInfo.textContent = stock
           ? `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／${stock.name} ${stock.cars}両を留置中／車両番号 ${depot.unitId}`
           : `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／空線：新規列車を購入できます`;
+        depotAngle.value = String(depot.rotation ?? DEFAULT_STATION_ROTATION);
+        depotAngle.disabled = connected;
+        depotAngleValue.textContent = `${(depot.rotation ?? DEFAULT_STATION_ROTATION).toFixed(1)}°`;
+        depotGuidance.textContent = connected
+          ? '出入口は線路接続済み（片側1か所）。線路の破断を防ぐため移動・回転は固定しています。'
+          : '基地本体をドラッグで移動・紫の↻で自由回転。「複線」で出入口1か所だけに接続できます。';
         depotBuyButton.disabled = !!stock || !!tooLong;
         depotVehicleSelect.disabled = !!stock;
         if (stock) depotVehicleSelect.value = stock.id;
@@ -2512,6 +2629,100 @@
         redrawPlaced();
       }
 
+      function depotCanvasCenter(depot) {
+        if (mapMode === 'kariya') return geoToCanvas(depot.lon, depot.lat);
+        return { x: depot.xRatio * canvasSize.width, y: depot.yRatio * canvasSize.height };
+      }
+
+      function depotRotationGripFromEvent(event) {
+        const grip = event.target?.closest?.('[data-rotate-depot-id]');
+        if (!grip) return null;
+        return depots.find(depot => depot.id === Number(grip.getAttribute('data-rotate-depot-id')) && isOnCurrentLevel(depot)) || null;
+      }
+
+      function depotAngleAtPointer(event, depot) {
+        const point = rawPointerOnCanvas(event);
+        if (!point) return null;
+        const center = depotCanvasCenter(depot);
+        if (Math.hypot(point.x - center.x, point.y - center.y) < .001) return null;
+        return Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI;
+      }
+
+      function setDepotRotation(degrees) {
+        const depot = selectedDepot();
+        if (!depot) return;
+        if (depotHasRailConnection(depot.id)) {
+          hint.textContent = '線路接続済みの車両基地は回転できません';
+          updateDepotPanel();
+          return;
+        }
+        depot.rotation = normalDegrees(degrees);
+        redrawPlaced();
+        updateDepotPanel();
+      }
+
+      function beginDepotRotationDrag(event, depot) {
+        if (depotHasRailConnection(depot.id)) {
+          selectDepot(depot.id);
+          hint.textContent = '線路接続済みの車両基地は位置・角度を固定しています';
+          return;
+        }
+        const pointerAngle = depotAngleAtPointer(event, depot);
+        if (pointerAngle === null) return;
+        selectDepot(depot.id);
+        depotRotationDragStart = { id: depot.id, pointerId: event.pointerId,
+          offset: pointerAngle - depot.rotation };
+        depotDragStart = null;
+        svg.setPointerCapture(event.pointerId);
+        hint.textContent = '紫の↻を動かすと車両基地を自由に回転できます（出入口の方向も変わります）';
+      }
+
+      function dragDepotRotation(event) {
+        if (!depotRotationDragStart || depotRotationDragStart.pointerId !== event.pointerId) return false;
+        const depot = selectedDepot();
+        if (!depot || depot.id !== depotRotationDragStart.id) return false;
+        const pointerAngle = depotAngleAtPointer(event, depot);
+        if (pointerAngle !== null) setDepotRotation(pointerAngle - depotRotationDragStart.offset);
+        return true;
+      }
+
+      function beginDepotDrag(event, depot) {
+        selectDepot(depot.id);
+        if (depotHasRailConnection(depot.id)) {
+          hint.textContent = '線路接続済みの車両基地は移動できません。接続を保つため位置を固定しています';
+          return;
+        }
+        depotDragStart = { id: depot.id, pointerId: event.pointerId, screenX: event.clientX,
+          screenY: event.clientY, original: { ...depot } };
+        svg.setPointerCapture(event.pointerId);
+        hint.textContent = '車両基地をドラッグして移動できます。出入口から線路を接続できます';
+      }
+
+      function dragDepot(event) {
+        if (!depotDragStart || depotDragStart.pointerId !== event.pointerId) return false;
+        const depot = selectedDepot();
+        if (!depot || depot.id !== depotDragStart.id) return false;
+        const screenDX = event.clientX - depotDragStart.screenX;
+        const screenDY = event.clientY - depotDragStart.screenY;
+        if (Math.hypot(screenDX, screenDY) <= TAP_SLOP) return true; // タップで購入画面を開く動作を維持
+        const bounds = svg.getBoundingClientRect();
+        const dx = screenDX * view.width / bounds.width;
+        const dy = screenDY * view.height / bounds.height;
+        if (mapMode === 'kariya') {
+          const start = geoToCanvas(depotDragStart.original.lon, depotDragStart.original.lat);
+          const next = canvasToGeo(start.x + dx, start.y + dy);
+          depot.lon = next.lon;
+          depot.lat = next.lat;
+        } else {
+          const x = depotDragStart.original.xRatio * canvasSize.width + dx;
+          const y = depotDragStart.original.yRatio * canvasSize.height + dy;
+          depot.xRatio = Math.max(0, Math.min(1, x / canvasSize.width));
+          depot.yRatio = Math.max(0, Math.min(1, y / canvasSize.height));
+        }
+        redrawPlaced();
+        return true;
+      }
+
       function placeDepot(event) {
         if (!placingDepot) return;
         const raw = rawPointerOnCanvas(event);
@@ -2522,11 +2733,12 @@
           y: Math.max(half, Math.min(canvasSize.height - half, raw.y))
         };
         const depot = mapMode === 'kariya'
-          ? { id: nextDepotId++, mode: mapMode, level: currentLevel, carCount: selectedCars, ...canvasToGeo(point.x, point.y), vehicleId: null, unitId: null }
-          : { id: nextDepotId++, mode: mapMode, level: currentLevel, carCount: selectedCars,
+          ? { id: nextDepotId++, mode: mapMode, level: currentLevel, rotation: DEFAULT_STATION_ROTATION, carCount: selectedCars, ...canvasToGeo(point.x, point.y), vehicleId: null, unitId: null }
+          : { id: nextDepotId++, mode: mapMode, level: currentLevel, rotation: DEFAULT_STATION_ROTATION, carCount: selectedCars,
               xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, vehicleId: null, unitId: null };
         depots.push(depot);
         selectDepot(depot.id);
+        syncTrackOrigins();
         preview.setAttribute('visibility', 'hidden');
         hint.textContent = `車両基地${depot.id}（1線・${depot.carCount}両対応）を${floorLabel()}に建設しました。車両を購入できます`;
       }
@@ -2752,6 +2964,8 @@
 
       function beginPinch() {
         if (touches.size !== 2) return;
+        depotDragStart = null;
+        depotRotationDragStart = null;
         const [a, b] = [...touches.values()];
         const bounds = svg.getBoundingClientRect();
         const midX = (a.x + b.x) / 2;
@@ -2978,8 +3192,8 @@
         if (layingTrack) suggestRouteForTrackOrigin();
         redrawPlaced();
         hint.textContent = layingTrack
-          ? '接続元を選んで、相手の駅の上り側／下り側の丸をタップしてください'
-          : '「複線」で駅から線路を延ばせます';
+          ? '接続元を選んで、駅端か車両基地の出入口の丸をタップしてください'
+          : '「複線」で駅・車両基地から線路を延ばせます';
       });
 
       depotButton.addEventListener('click', () => {
@@ -3013,6 +3227,7 @@
       document.querySelector('#depot-close').addEventListener('click', closeDepotPanel);
       depotBuyButton.addEventListener('click', purchaseDepotVehicle);
       depotVehicleSelect.addEventListener('change', () => updateDepotPanel());
+      depotAngle.addEventListener('input', () => setDepotRotation(Number(depotAngle.value)));
 
       trackOriginSelect.addEventListener('change', () => {
         suggestRouteForTrackOrigin();
@@ -3103,7 +3318,7 @@
       function buildTrack() {
         const selected = availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value);
         if (!selected) {
-          hint.textContent = '先に1面2線の駅を配置してください';
+          hint.textContent = '先に駅または車両基地を配置してください';
           return;
         }
         const result = validateTrack(selected.source, trackDestination, currentTrackGeometry(), trackTargetStation);
@@ -3117,16 +3332,22 @@
           target: { ...trackDestination }, ...(trackTargetStation ? { targetStation: { ...trackTargetStation } } : {}),
           routeId: routeById(trackRouteSelect.value)?.id || null,
           crossoverEnds: [selected.source.type === 'station' ? 'source' : null,
-            trackTargetStation ? 'destination' : null].filter(Boolean) });
-        const stationConnection = !!trackTargetStation;
+            trackTargetStation?.type === 'station' ? 'destination' : null].filter(Boolean) });
+        const facilityConnection = !!trackTargetStation;
+        const depotConnection = selected.source.type === 'depot' || trackTargetStation?.type === 'depot';
         connectionDialog.hidden = true;
         trackTargetStation = null;
         trackDestination = null;
-        syncTrackOrigins(stationConnection ? '' : `section:${id}`);
+        syncTrackOrigins(facilityConnection ? '' : `section:${id}`);
         updateVehicleRouteOptions();
         redrawPlaced();
         updateStationEditor();
-        hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを${stationConnection ? '駅の線路端まで接続し、両駅側にX字渡り線を設置しました' : selected.source.type === 'station' ? '自動敷設し、駅端にX字渡り線を設置しました' : '自動敷設しました。次の行き先をタップして延長できます'}`;
+        updateDepotPanel();
+        hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを${depotConnection
+          ? '車両基地の出入口1か所に接続しました（車止め側は閉鎖）'
+          : facilityConnection ? '駅の線路端まで接続し、駅側にX字渡り線を設置しました'
+            : selected.source.type === 'station' ? '自動敷設し、駅端にX字渡り線を設置しました'
+              : '自動敷設しました。次の行き先をタップして延長できます'}`;
       }
       trackBuildButton.addEventListener('click', () => trackTargetStation ? openConnectionDialog() : buildTrack());
       connectionConfirm.addEventListener('click', buildTrack);
@@ -3173,6 +3394,8 @@
         selectedStationId = null;
         stationDragStart = null;
         rotationDragStart = null;
+        depotDragStart = null;
+        depotRotationDragStart = null;
         pendingDepotTap = null;
         trackPreview.replaceChildren();
         trackDestination = null;
@@ -3199,6 +3422,8 @@
         trackTargetStation = null;
         stationDragStart = null;
         rotationDragStart = null;
+        depotDragStart = null;
+        depotRotationDragStart = null;
         connectionDialog.hidden = true;
         hideInterchangeDialog();
         preview.setAttribute('visibility', 'hidden');
@@ -3217,6 +3442,8 @@
         selectedStationId = null;
         stationDragStart = null;
         rotationDragStart = null;
+        depotDragStart = null;
+        depotRotationDragStart = null;
         pendingDepotTap = null;
         mousePanStart = null;
         panStart = null;
@@ -3262,7 +3489,15 @@
             event.preventDefault();
             return;
           }
+          if (touches.size === 1 && dragDepotRotation(event)) {
+            event.preventDefault();
+            return;
+          }
           if (touches.size === 1 && dragStation(event)) {
+            event.preventDefault();
+            return;
+          }
+          if (touches.size === 1 && dragDepot(event)) {
             event.preventDefault();
             return;
           }
@@ -3291,7 +3526,9 @@
           return;
         }
         if (dragRotation(event)) return;
+        if (dragDepotRotation(event)) return;
         if (dragStation(event)) return;
+        if (dragDepot(event)) return;
         if (mousePanStart) {
           const bounds = svg.getBoundingClientRect();
           applyView({
@@ -3305,13 +3542,20 @@
       svg.addEventListener('pointerdown', event => {
         setSettingsOpen(false);
         const hitGrip = rotationGripFromEvent(event);
+        const hitDepotGrip = !layingTrack ? depotRotationGripFromEvent(event) : null;
         const hitStation = stationFromEvent(event);
         const hitDepot = !layingTrack ? depotFromEvent(event) : null;
         if (event.pointerType === 'touch') {
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
-          if (touches.size === 1 && hitDepot) {
+          if (touches.size === 1 && hitDepotGrip) {
+            beginDepotRotationDrag(event, hitDepotGrip);
+            pendingDepotTap = null;
+            pendingTouchPlacement = null;
+            panStart = null;
+          } else if (touches.size === 1 && hitDepot) {
             pendingDepotTap = { id: event.pointerId, depotId: hitDepot.id, x: event.clientX, y: event.clientY };
+            beginDepotDrag(event, hitDepot);
             pendingTouchPlacement = null;
             stationDragStart = null;
             rotationDragStart = null;
@@ -3327,6 +3571,8 @@
           } else {
             stationDragStart = null;
             rotationDragStart = null;
+            depotDragStart = null;
+            depotRotationDragStart = null;
             if (touches.size === 1) selectStation(null);
             pendingTouchPlacement = touches.size === 1 && (placing || placingDepot || layingTrack)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
@@ -3340,8 +3586,11 @@
           return;
         }
         if (event.button !== 0) return;
-        if (hitDepot) {
-          selectDepot(hitDepot.id);
+        if (hitDepotGrip) {
+          beginDepotRotationDrag(event, hitDepotGrip);
+          preview.setAttribute('visibility', 'hidden');
+        } else if (hitDepot) {
+          beginDepotDrag(event, hitDepot);
           preview.setAttribute('visibility', 'hidden');
         } else if (layingTrack) {
           mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
@@ -3368,12 +3617,16 @@
           if (stationDragStart?.pointerId === event.pointerId) finishStationMove();
           stationDragStart = null;
           rotationDragStart = null;
+          depotDragStart = null;
+          depotRotationDragStart = null;
           mousePanStart = null;
           if (tappedDestination) selectTrackDestination(event);
           return;
         }
         const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
         const finishedRotationDrag = rotationDragStart?.pointerId === event.pointerId;
+        const finishedDepotDrag = depotDragStart?.pointerId === event.pointerId;
+        const finishedDepotRotation = depotRotationDragStart?.pointerId === event.pointerId;
         const depotTap = pendingDepotTap?.id === event.pointerId && touches.size === 1 &&
           Math.hypot(event.clientX - pendingDepotTap.x, event.clientY - pendingDepotTap.y) <= TAP_SLOP
           ? pendingDepotTap.depotId : null;
@@ -3385,6 +3638,8 @@
         if (finishedStationDrag) finishStationMove();
         if (finishedStationDrag) stationDragStart = null;
         if (finishedRotationDrag) rotationDragStart = null;
+        if (finishedDepotDrag) depotDragStart = null;
+        if (finishedDepotRotation) depotRotationDragStart = null;
         pendingTouchPlacement = null;
         pendingDepotTap = null;
         pinchStart = null;
@@ -3402,6 +3657,8 @@
         touches.delete(event.pointerId);
         if (stationDragStart?.pointerId === event.pointerId) stationDragStart = null;
         if (rotationDragStart?.pointerId === event.pointerId) rotationDragStart = null;
+        if (depotDragStart?.pointerId === event.pointerId) depotDragStart = null;
+        if (depotRotationDragStart?.pointerId === event.pointerId) depotRotationDragStart = null;
         pendingTouchPlacement = null;
         pendingDepotTap = null;
         pinchStart = null;

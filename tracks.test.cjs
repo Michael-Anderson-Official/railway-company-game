@@ -44,7 +44,7 @@ class Element {
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
   '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
-  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
+  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
   '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
@@ -546,7 +546,7 @@ const depotOneCars = nodes['#depots'].children[0].children[0].children.filter(ch
 assert.ok(Math.abs(Number(depotOneCars[0].attributes.height) / Number(nodes['#depots'].children[0].children[0].children[0].attributes.height) - 2.8 / 18) < 1e-8,
   'depot train roof is rendered at the real-world 2.8m width');
 assert.ok(Math.abs(Number(depotOneCars[0].attributes.width) /
-  Number(nodes['#depots'].children[0].children[0].children[0].attributes.width) - 19 / 140) < 1e-8,
+  Number(nodes['#depots'].children[0].children[0].children[0].attributes.width) - 19 / 129) < 1e-8,
   'car drawings use 20m pitch and one-meter coupler spacing on the real-scale map');
 nodes['#depot-buy'].dispatch('click');
 assert.match(nodes['#depot-owned'].textContent, /名鉄2200系：1編成/);
@@ -671,4 +671,96 @@ assert.equal(routes().length, countBeforeNamedTrack + 1);
 assert.ok(routes().at(-1).children.some(child => child.attributes.class === 'route-track-guide'),
   'a constructed track section displays its assigned route-colored guide');
 
-console.log('Tracks, route creation/editing, platform direction numbering, station numbering, two train models, depot and touch selection OK');
+// A new blank floor can connect a two-track station to exactly one open depot throat.
+nodes['#floor-level'].value = '-3';
+nodes['#floor-level'].dispatch('change');
+nodes['#car-count'].value = '2';
+nodes['#car-count'].dispatch('change');
+nodes['#place-tool'].dispatch('click');
+mouseTap(200, 90);
+const depotLinkStationId = nodes['#placed'].children[0].attributes['data-station-id'];
+nodes['#depot-tool'].dispatch('click');
+mouseTap(200, 530);
+const linkedDepotId = nodes['#depots'].children[0].attributes['data-depot-id'];
+assert.equal(nodes['#depot-angle'].value, '90');
+assert.equal(nodes['#depots'].children[0].children[0].attributes.transform, 'rotate(90)');
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes.class === 'depot-buffer').length, 1,
+  'head-end storage has a buffer stop only on the closed end');
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes.class === 'depot-rail').length, 1);
+
+// The selected depot supports a continuous angle slider and a pointer-drag grip.
+nodes['#depot-angle'].value = '270.5';
+nodes['#depot-angle'].dispatch('input');
+assert.equal(nodes['#depots'].children[0].children[0].attributes.transform, 'rotate(270.5)');
+assert.equal(nodes['#depot-angle-value'].textContent, '270.5°');
+const beforeDepotMove = nodes['#depots'].children[0].attributes.transform;
+const depotBody = nodes['#depots'].children[0].children[0].children.find(child => child.attributes.class === 'depot-hit');
+board.dispatch('pointerdown', { pointerType: 'touch', pointerId: 402, clientX: 200, clientY: 530, button: 0, target: depotBody, preventDefault() {} });
+touch('pointermove', 402, 211, 530); // 11px stays a tap; it must not shift the building
+assert.equal(nodes['#depots'].children[0].attributes.transform, beforeDepotMove);
+touch('pointermove', 402, 230, 530);
+touch('pointerup', 402, 230, 530);
+assert.notEqual(nodes['#depots'].children[0].attributes.transform, beforeDepotMove, 'touch drag moves depot');
+const movedDepotCenter = nodes['#depots'].children[0].attributes.transform;
+const grip = nodes['#depots'].children[0].children.find(child => child.attributes.class === 'rotation-grip');
+assert.ok(grip, 'selected depot has a purple free-rotation handle');
+board.dispatch('pointerdown', { pointerType: 'mouse', pointerId: 407, clientX: 230, clientY: 490, button: 0, target: grip, preventDefault() {} });
+board.dispatch('pointermove', { pointerType: 'mouse', pointerId: 407, clientX: 270, clientY: 530, target: board, preventDefault() {} });
+board.dispatch('pointerup', { pointerType: 'mouse', pointerId: 407, clientX: 270, clientY: 530, target: board, preventDefault() {} });
+assert.notEqual(nodes['#depot-angle-value'].textContent, '270.5°', 'grip rotates depot with pointer movement');
+assert.equal(nodes['#depots'].children[0].attributes.transform, movedDepotCenter, 'rotation does not translate depot');
+nodes['#depot-angle'].value = '270';
+nodes['#depot-angle'].dispatch('input');
+
+nodes['#track-tool'].dispatch('click');
+const depotOriginKey = `depot:${linkedDepotId}`;
+assert.ok(nodes['#track-origin'].children.some(option => option.value === depotOriginKey), 'depot throat is a selectable source');
+assert.equal(nodes['#station-endpoints'].children.length, 3, 'one depot marker and two station markers');
+nodes['#track-origin'].value = `station:${depotLinkStationId}:1`;
+nodes['#track-origin'].dispatch('change');
+const entranceMarker = nodes['#station-endpoints'].children[2].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+tapTarget(Number(entranceMarker[1]), Number(entranceMarker[2]));
+assert.equal(nodes['#connection-dialog'].hidden, false, nodes['#track-validation'].textContent);
+assert.equal(nodes['#connection-question'].textContent, `車両基地${linkedDepotId}の出入口に接続しますか？`);
+assert.equal(nodes['#build-track'].disabled, false, nodes['#track-validation'].textContent);
+nodes['#connection-confirm'].dispatch('click');
+assert.equal(routes().length, 1, 'station and depot are joined on the same floor');
+checkCrossovers(routes()[0], ['source']); // depot has a single-track turnout, not an X crossover
+assert.ok(endpointGap(routes()[0], true) < 1e-7, 'two line tracks merge exactly onto the one depot rail');
+assert.equal(nodes['#station-endpoints'].children[2].children[0].attributes.class, 'station-endpoint occupied');
+assert.ok(!nodes['#track-origin'].children.some(option => option.value === depotOriginKey), 'used depot throat cannot start a second line');
+tapTarget(Number(entranceMarker[1]), Number(entranceMarker[2]));
+assert.equal(nodes['#connection-dialog'].hidden, true, 'occupied depot throat is not connectable twice');
+assert.match(nodes['#track-validation'].textContent, /既に線路が接続/);
+nodes['#track-tool'].dispatch('click');
+// Track tool closes on construction, leaving the depot selectable with locked rotation and position.
+const connectedDepotBody = nodes['#depots'].children[0].children[0].children.find(child => child.attributes.class === 'depot-hit');
+board.dispatch('pointerdown', { pointerType: 'mouse', pointerId: 411, clientX: 230, clientY: 530, button: 0, target: connectedDepotBody, preventDefault() {} });
+const connectedTransform = nodes['#depots'].children[0].attributes.transform;
+mouse('pointermove', 310, 550);
+mouse('pointerup', 310, 550);
+assert.equal(nodes['#depots'].children[0].attributes.transform, connectedTransform, 'connected depot cannot be dragged away');
+assert.equal(nodes['#depot-angle'].disabled, true, 'connected depot rotation slider is locked');
+assert.match(nodes['#depot-guidance'].textContent, /線路接続済み/);
+
+// A depot also works as a track origin, joining the station's upper end from below.
+nodes['#floor-level'].value = '-2';
+nodes['#floor-level'].dispatch('change');
+nodes['#depot-tool'].dispatch('click');
+mouseTap(200, 100);
+const originDepotId = nodes['#depots'].children[0].attributes['data-depot-id'];
+nodes['#place-tool'].dispatch('click');
+mouseTap(200, 520);
+nodes['#track-tool'].dispatch('click');
+nodes['#track-origin'].value = `depot:${originDepotId}`;
+nodes['#track-origin'].dispatch('change');
+const stationEntrance = nodes['#station-endpoints'].children[0].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
+tapTarget(Number(stationEntrance[1]), Number(stationEntrance[2]));
+assert.equal(nodes['#build-track'].disabled, false, nodes['#track-validation'].textContent);
+assert.match(nodes['#connection-question'].textContent, /上り側に接続しますか/);
+nodes['#connection-confirm'].dispatch('click');
+assert.equal(routes().length, 1);
+assert.ok(endpointGap(routes()[0]) < 1e-7, 'origin depot throat has one rail');
+checkCrossovers(routes()[0], ['destination']);
+
+console.log('Tracks, platform numbering, route management, trains, one-sided head-end depot connection, mobile move/rotation and lock OK');
