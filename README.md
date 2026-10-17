@@ -102,3 +102,5 @@
 背景地図：[国土地理院「地理院タイル（標準地図）」](https://maps.gsi.go.jp/development/ichiran.html)／[利用規約](https://maps.gsi.go.jp/help/termsofuse.html)。地図画像は利用者のブラウザが国土地理院のサーバから取得します。
 
 駅位置等の参考：© [OpenStreetMap contributors](https://www.openstreetmap.org/copyright)、Open Database License。地理院の地図情報と調査済みPOIに、ゲーム独自の表示・操作を追加しています。
+
+- **経由点指定：**「路線」画面の「線路の経由地点」で対象駅間または車両基地の接続区間を選び、地図上の一点をタップすると、その位置を通る滑らかな複線へ再敷設。再指定・解除に対応。曲線半径・既存線路との交差・駅や基地の内部侵入を検証し、成立しない場合は元の線路へ戻す。設定は同じゲーム画面内の編集中に保持し、ページ再読み込み後の保存は未対応。

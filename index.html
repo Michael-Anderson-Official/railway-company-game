@@ -182,6 +182,20 @@
     .editor-name input:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .station-track-guide { display: flex; gap: 8px; margin: 1px 0 10px; }
     .station-track-guide span { flex: 1; min-width: 0; background: #eef5fd; border-radius: 7px; padding: 7px; font-size: 12px; font-weight: 750; color: #1c4c7e; text-align: center; }
+    /* 経由点指定は地図をタップ、必要なら削除して直線側へ戻す。 */
+    .waypoint-manager { margin-top: 12px; padding: 11px; border: 1px solid #d8e3ee; border-radius: 10px; background: #f7faff; }
+    .waypoint-manager h3 { font-size: 13px; margin: 0 0 9px; color: #284869; }
+    .waypoint-manager label { display: grid; gap: 4px; font-size: 12px; font-weight: 700; color: #425872; }
+    .waypoint-manager select { font: inherit; font-size: 14px; min-height: 39px; border: 1px solid #cbd7e6; border-radius: 7px; background: white; padding: 7px; max-width: 100%; }
+    .waypoint-actions { display: flex; flex-wrap: wrap; gap: 6px; margin: 8px 0; }
+    .waypoint-actions button { min-height: 38px; border: 1px solid #b2c8e5; border-radius: 8px; background: white; color: #174e8e; font: inherit; font-size: 12px; font-weight: 700; padding: 7px 10px; cursor: pointer; }
+    .waypoint-actions button[aria-pressed="true"] { background: #2158a3; color: white; }
+    .waypoint-actions button:disabled { opacity: .42; cursor: not-allowed; }
+    .waypoint-status { font-size: 11px; line-height: 1.55; min-height: 18px; color: #20537c; margin: 6px 0 0; }
+    .waypoint-status.invalid { color: #b32838; }
+    #waypoint-layer { pointer-events: none; }
+    .waypoint-marker circle { fill: #ffe28c; stroke: #1959a9; }
+    .waypoint-marker text { fill: #103e75; paint-order: stroke; stroke: white; stroke-width: 3px; font-weight: 850; }
     .station-route-editor { padding: 10px 0; margin: 10px 0 0; border-top: 1px solid #e4edf9; }
     .station-route-editor h3 { font-size: 12px; margin: 0 0 8px; color: #254767; }
     .station-route-fields { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 7px; }
@@ -492,6 +506,7 @@
         <g id="map-markers" class="map-markers"></g>
         <g id="catchment-rings" class="catchment-rings"></g>
         <g id="tracks" class="double-track"></g>
+        <g id="waypoint-layer" aria-label="自動線路の経由点"></g>
         <g id="track-preview" class="track-preview"></g>
         <g id="placed"></g>
         <g id="depots"></g>
@@ -600,6 +615,17 @@
         <div id="route-list" class="route-list" aria-label="作成した路線一覧"></div>
         <p id="auto-route-warnings" class="route-manager-status invalid" role="status" aria-live="polite" hidden></p>
         <p class="route-manager-note">駅に番号（1〜99）を付けると、同一路線・同じ階層の隣り合う番号の駅を複線で自動接続。線路の交差や急曲線がある場合は接続を保留し、駅の位置・角度を調整できます。</p>
+        <section class="waypoint-manager" aria-label="線路の経由点を編集">
+          <h3>線路の経由地点</h3>
+          <label for="waypoint-section">経由させたい区間
+            <select id="waypoint-section" aria-label="経由点を追加する線路区間"><option value="">区間を選択</option></select>
+          </label>
+          <div class="waypoint-actions">
+            <button id="waypoint-pick" type="button" aria-pressed="false">地図上で経由地点をタップ</button>
+            <button id="waypoint-clear" type="button">経由点を解除</button>
+          </div>
+          <p class="waypoint-status" id="waypoint-status" role="status" aria-live="polite">路線の駅番号を登録すると区間が表示されます。</p>
+        </section>
       </aside>
       <aside class="service-manager" id="service-manager" aria-label="列車種別と停車駅の作成" hidden>
         <div class="route-manager-heading"><h2>種別・停車駅の設定</h2><button id="service-close" type="button" aria-label="種別設定を閉じる">×</button></div>
@@ -763,6 +789,11 @@
       const routeSaveButton = document.querySelector('#route-save');
       const routeManagerStatus = document.querySelector('#route-manager-status');
       const autoRouteWarnings = document.querySelector('#auto-route-warnings');
+      const waypointSectionSelect = document.querySelector('#waypoint-section');
+      const waypointPickButton = document.querySelector('#waypoint-pick');
+      const waypointClearButton = document.querySelector('#waypoint-clear');
+      const waypointStatus = document.querySelector('#waypoint-status');
+      const waypointLayer = document.querySelector('#waypoint-layer');
       const routeList = document.querySelector('#route-list');
       const toolBar = document.querySelector('#tool-bar');
       const settingsToggle = document.querySelector('#settings-toggle');
@@ -920,6 +951,9 @@
       let placing = false;
       let placingDepot = false;
       let layingTrack = false;
+      let waypointPicking = false;
+      const trackWaypoints = new Map(); // autoKey -> { mode, level, lon, lat } or { xRatio, yRatio }
+      let waypointFailureReasons = new Map();
       const depots = [];
       let nextDepotId = 1;
       let nextUnitId = 1;
@@ -1102,6 +1136,102 @@
           elements.push(empty);
         }
         routeList.replaceChildren(...elements);
+        renderWaypointControls();
+      }
+
+      function waypointChoices() {
+        const choices = [];
+        for (const route of routes) {
+          const stations = serviceStations(route.id);
+          for (let i = 1; i < stations.length; i++) {
+            const from = stations[i - 1], to = stations[i];
+            if (!isOnCurrentLevel(from) || !isOnCurrentLevel(to)) continue;
+            choices.push({ key: `route:${route.id}:${from.id}:${to.id}`,
+              label: `${route.code} ${numberedStationLabel(route, from.routeNumbers[route.id])} ${from.name} → ${numberedStationLabel(route, to.routeNumbers[route.id])} ${to.name}` });
+          }
+        }
+        for (const depot of depots.filter(isOnCurrentLevel)) {
+          const route = routeById(depot.routeId);
+          if (route) choices.push({ key: `depot:${depot.id}`, label: `${route.code} 車両基地${depot.id} → 本線` });
+        }
+        return choices;
+      }
+
+      function activeTrackWaypoint(key) {
+        const waypoint = trackWaypoints.get(key);
+        return waypoint && waypoint.mode === mapMode && waypoint.level === currentLevel ? waypoint : null;
+      }
+
+      function renderWaypointControls() {
+        const former = waypointSectionSelect.value;
+        const choices = waypointChoices();
+        waypointSectionSelect.replaceChildren(routeSelectOption('', '区間を選択'),
+          ...choices.map(choice => routeSelectOption(choice.key,
+            `${activeTrackWaypoint(choice.key) ? '● ' : ''}${choice.label}`)));
+        waypointSectionSelect.value = choices.some(choice => choice.key === former) ? former : '';
+        waypointPickButton.disabled = !waypointSectionSelect.value;
+        waypointClearButton.disabled = !activeTrackWaypoint(waypointSectionSelect.value);
+        waypointPickButton.setAttribute('aria-pressed', String(waypointPicking));
+        waypointPickButton.textContent = waypointPicking ? '地点選択をキャンセル' : '地図上で経由地点をタップ';
+      }
+
+      function showWaypointStatus(text, invalid = false) {
+        waypointStatus.textContent = text;
+        waypointStatus.classList.toggle('invalid', invalid);
+        hint.textContent = text;
+      }
+
+      function setWaypointFromTap(event) {
+        if (!waypointPicking || !waypointSectionSelect.value) return;
+        const point = rawPointerOnCanvas(event);
+        if (!point) return;
+        const key = waypointSectionSelect.value;
+        const former = trackWaypoints.get(key);
+        const saved = mapMode === 'kariya' ? { ...canvasToGeo(point.x, point.y) }
+          : { xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height };
+        trackWaypoints.set(key, { ...saved, mode: mapMode, level: currentLevel });
+        automaticTracksDirty = true;
+        redrawPlaced();
+        const succeeded = trackSections.some(section => section.automatic && section.autoKey === key && isOnCurrentLevel(section));
+        if (!succeeded) {
+          if (former) trackWaypoints.set(key, former);
+          else trackWaypoints.delete(key);
+          const reason = waypointFailureReasons.get(key) || '指定位置の曲率・交差・接続条件を満たしません';
+          automaticTracksDirty = true;
+          redrawPlaced();
+          waypointSectionSelect.value = key;
+          renderWaypointControls();
+          showWaypointStatus(`敷設できません：${reason}。元の線路を維持しました。別の地点を指定してください。`, true);
+          return;
+        }
+        waypointPicking = false;
+        renderWaypointControls();
+        showWaypointStatus('指定地点を通る複線へ再敷設しました。変更する場合は再び地点指定を押してください。');
+      }
+
+      function renderWaypointMarkers() {
+        const zoom = canvasSize.width / view.width;
+        const nodes = [];
+        for (const [key, waypoint] of trackWaypoints.entries()) {
+          if (!activeTrackWaypoint(key)) continue;
+          const point = targetCanvasPoint(waypoint);
+          const group = document.createElementNS(SVG_NS, 'g');
+          group.setAttribute('class', 'waypoint-marker');
+          group.setAttribute('transform', `translate(${point.x} ${point.y})`);
+          group.setAttribute('aria-label', `線路区間${key}の経由点`);
+          const marker = document.createElementNS(SVG_NS, 'circle');
+          marker.setAttribute('r', String(8 / zoom));
+          marker.setAttribute('stroke-width', String(2.5 / zoom));
+          group.append(marker);
+          const label = document.createElementNS(SVG_NS, 'text');
+          label.setAttribute('x', String(13 / zoom));
+          label.setAttribute('y', String(-7 / zoom));
+          label.setAttribute('font-size', String(12 / zoom));
+          label.textContent = '経由点';
+          group.append(label);
+          nodes.push(group);
+        }
+        waypointLayer.replaceChildren(...nodes);
       }
 
       function fillRouteForm() {
@@ -1258,6 +1388,8 @@
 
       function closeRouteManager() {
         routeManager.hidden = true;
+        waypointPicking = false;
+        renderWaypointControls();
         routeButton.setAttribute('aria-expanded', 'false');
       }
 
@@ -1469,18 +1601,32 @@
         automaticTracksDirty = false;
         if (vehicleRun) stopVehicleRun(false);
         if (depotRun) cancelDepotRun();
+        const previousConnections = new Map(trackSections.filter(section => section.automatic && isOnCurrentLevel(section))
+          .map(section => [section.autoKey, section]));
         const others = trackSections.filter(section => !section.automatic || !isOnCurrentLevel(section));
         trackSections.splice(0, trackSections.length, ...others);
         automaticTrackWarnings = [];
+        waypointFailureReasons = new Map();
         const occupied = new Set();
         for (const section of trackSections.filter(isOnCurrentLevel)) {
           occupied.add(trackOriginKey(section.source));
           if (section.targetStation) occupied.add(trackOriginKey(section.targetStation));
         }
-        const tryJoin = (source, destination) => {
-          if (occupied.has(trackOriginKey(source)) || occupied.has(trackOriginKey(destination))) return null;
-          const result = validateTrack(source, null, currentTrackGeometry(), destination);
-          return result.error ? null : { source, destination, lengthMeters: result.lengthMeters };
+        const tryJoin = (source, destination, via = null, key = null) => {
+          const original = via && key && previousConnections.get(key);
+          // 経由点を動かしただけなら既存の駅端・車両基地出入口を変えない。
+          if (original && (trackOriginKey(source) !== trackOriginKey(original.source) ||
+              trackOriginKey(destination) !== trackOriginKey(original.targetStation))) return null;
+          if (occupied.has(trackOriginKey(source)) || occupied.has(trackOriginKey(destination))) {
+            if (via && key && !waypointFailureReasons.has(key)) waypointFailureReasons.set(key, '接続先の駅端がほかの線路で使用されています');
+            return null;
+          }
+          const result = validateTrack(source, null, currentTrackGeometry(), destination, via);
+          if (result.error) {
+            if (via && key && !waypointFailureReasons.has(key)) waypointFailureReasons.set(key, result.error);
+            return null;
+          }
+          return { source, destination, lengthMeters: result.lengthMeters, via };
         };
         const addJoin = (key, routeId, chosen) => {
           if (!automaticTrackIds.has(key)) automaticTrackIds.set(key, nextTrackSectionId++);
@@ -1490,7 +1636,7 @@
             targetStation.type === 'station' ? 'destination' : null].filter(Boolean);
           trackSections.push({ id: automaticTrackIds.get(key), autoKey: key, automatic: true,
             mode: mapMode, level: currentLevel, routeId, source, targetStation,
-            crossoverEnds: stationCrossovers });
+            ...(chosen.via ? { waypoint: chosen.via } : {}), crossoverEnds: stationCrossovers });
           occupied.add(trackOriginKey(source));
           occupied.add(trackOriginKey(targetStation));
         };
@@ -1506,13 +1652,15 @@
               continue;
             }
             const choices = [];
+            const key = `route:${route.id}:${from.id}:${to.id}`;
+            const via = activeTrackWaypoint(key);
             for (const firstSide of [-1, 1]) for (const lastSide of [-1, 1]) {
               const choice = tryJoin({ type: 'station', stationId: from.id, side: firstSide },
-                { type: 'station', stationId: to.id, side: lastSide });
+                { type: 'station', stationId: to.id, side: lastSide }, via, key);
               if (choice) choices.push(choice);
             }
             choices.sort((a, b) => a.lengthMeters - b.lengthMeters);
-            if (choices.length) addJoin(`route:${route.id}:${from.id}:${to.id}`, route.id, choices[0]);
+            if (choices.length) addJoin(key, route.id, choices[0]);
             else automaticTrackWarnings.push(`${label}：曲線半径・向き・交差または空き駅端の条件を満たしません。駅を移動／回転してください`);
           }
         }
@@ -1520,13 +1668,14 @@
           const route = routeById(depot.routeId);
           if (!route) continue;
           const choices = [];
+          const via = activeTrackWaypoint(`depot:${depot.id}`);
           const linkedStations = serviceStations(route.id).filter(isOnCurrentLevel);
           for (const station of linkedStations) {
             for (const side of [-1, 1]) {
               const endpoint = { type: 'station', stationId: station.id, side };
               const mouth = { type: 'depot', depotId: depot.id };
-              const outward = tryJoin(mouth, endpoint);
-              const inward = tryJoin(endpoint, mouth);
+              const outward = tryJoin(mouth, endpoint, via, `depot:${depot.id}`);
+              const inward = tryJoin(endpoint, mouth, via, `depot:${depot.id}`);
               if (outward) choices.push({ ...outward, station });
               if (inward) choices.push({ ...inward, station });
             }
@@ -1549,7 +1698,9 @@
           if (origin) {
             const targetStation = section.targetStation && resolveTrackOrigin(section.targetStation, geometries);
             const result = section.targetStation
-              ? targetStation && makeStationConnectionTrack(origin, targetStation)
+              ? targetStation && (section.waypoint
+                ? makeWaypointConnectionTrack(origin, targetStation, targetCanvasPoint(section.waypoint))
+                : makeStationConnectionTrack(origin, targetStation))
               : makeAutomaticTrack(origin, targetCanvasPoint(section.target));
             if (result?.geometry) geometries.set(section.id, result.geometry);
           }
@@ -1743,6 +1894,32 @@
         return candidates[0];
       }
 
+      // 2つの5次ベジェ曲線を曲率0で接続。経由点を厳密に通り、接線を揃える。
+      // 各曲線は既存の最小曲線半径・駅構内の120m遷移と同じ条件で検証する。
+      function makeWaypointConnectionTrack(origin, targetEnd, via) {
+        const firstBearing = normalDegrees(Math.atan2(via.y - origin.y, via.x - origin.x) * 180 / Math.PI);
+        const secondBearing = normalDegrees(Math.atan2(targetEnd.y - via.y, targetEnd.x - via.x) * 180 / Math.PI);
+        const waypointHeading = normalDegrees(firstBearing + angleDifference(secondBearing, firstBearing) / 2);
+        const spacing = mapMode === 'kariya' ? DOUBLE_TRACK_SPACING_METERS * origin.scale : BLANK_TRACK_SPACING;
+        const viaArrival = { x: via.x, y: via.y, heading: normalDegrees(waypointHeading + 180),
+          scale: origin.scale, spacing, stationId: null, stationSource: false };
+        const viaDeparture = { x: via.x, y: via.y, heading: waypointHeading,
+          scale: origin.scale, spacing, stationId: null, stationSource: false };
+        const before = makeStationConnectionTrack(origin, viaArrival);
+        if (before.error) return { error: `経由点の手前：${before.error}` };
+        const after = makeStationConnectionTrack(viaDeparture, targetEnd);
+        if (after.error) return { error: `経由点の先：${after.error}` };
+        const firstLength = before.lengthMeters;
+        const lengthMeters = firstLength + after.lengthMeters;
+        if (lengthMeters > TRACK_MAX_LENGTH_METERS) return { error: '経由点を通る線路が1区間の最大距離を超えます' };
+        const points = before.geometry.points.concat(after.geometry.points.slice(1).map(point =>
+          ({ ...point, distance: point.distance + firstLength })));
+        return { geometry: { points, scale: origin.scale, stationId: origin.stationId,
+          stationSource: origin.stationSource, stationTarget: true, startSpacing: origin.spacing,
+          endSpacing: targetEnd.spacing, baseSpacing: spacing, lengthMeters },
+          lengthMeters, finalHeading: after.finalHeading };
+      }
+
       function trackSpacingAt(geometry, distance) {
         if (!geometry.stationTarget) {
           const taper = geometry.stationSource ? Math.min(1, distance / TRACK_STATION_TAPER_METERS) : 1;
@@ -1878,7 +2055,7 @@
           pointDistance(c, a, b), pointDistance(d, a, b));
       }
 
-      function validateTrack(source, target, geometries, targetStation = null) {
+      function validateTrack(source, target, geometries, targetStation = null, via = null) {
         const origin = resolveTrackOrigin(source, geometries);
         if (!origin) return { error: '駅・車両基地につながる線路端を選択してください' };
         if (!target && !targetStation) return { error: '地図上で行き先をタップしてください' };
@@ -1898,7 +2075,9 @@
           }
         }
         const end = targetStation && resolveTrackOrigin(targetStation, geometries);
-        const calculated = targetStation ? makeStationConnectionTrack(origin, end) : makeAutomaticTrack(origin, targetCanvasPoint(target));
+        const calculated = targetStation
+          ? via ? makeWaypointConnectionTrack(origin, end, targetCanvasPoint(via)) : makeStationConnectionTrack(origin, end)
+          : makeAutomaticTrack(origin, targetCanvasPoint(target));
         if (calculated.error) return calculated;
         const candidate = calculated.geometry;
         const existingSections = trackSections.filter(isOnCurrentLevel);
@@ -3633,6 +3812,7 @@
       function redrawPlaced() {
         rebuildAutomaticTracks();
         renderTracks();
+        renderWaypointMarkers();
         placed.replaceChildren(...positions.filter(isOnCurrentLevel).map(position => {
           if (mapMode === 'kariya') {
             const point = geoToCanvas(position.lon, position.lat);
@@ -3893,6 +4073,41 @@
         routeManager.hidden = false;
         routeButton.setAttribute('aria-expanded', 'true');
         renderRouteList();
+      });
+      waypointSectionSelect.addEventListener('change', () => {
+        waypointPicking = false;
+        renderWaypointControls();
+        waypointStatus.textContent = activeTrackWaypoint(waypointSectionSelect.value)
+          ? 'この区間には経由点があります。再指定または解除できます。'
+          : '「地図上で経由地点をタップ」を押して、地図上の地点を指定してください。';
+        waypointStatus.classList.toggle('invalid', false);
+      });
+      waypointPickButton.addEventListener('click', () => {
+        waypointPicking = !waypointPicking;
+        if (waypointPicking) {
+          placing = false;
+          placingDepot = false;
+          layingTrack = false;
+          button.setAttribute('aria-pressed', 'false');
+          depotButton.setAttribute('aria-pressed', 'false');
+          svg.classList.toggle('placing', false);
+          svg.classList.toggle('placing-depot', false);
+          selectStation(null);
+        }
+        renderWaypointControls();
+        showWaypointStatus(waypointPicking
+          ? '地図上で経由させたい地点を1回タップしてください。指でドラッグすると地図を移動します。'
+          : '地点の指定を取り消しました。');
+      });
+      waypointClearButton.addEventListener('click', () => {
+        const key = waypointSectionSelect.value;
+        if (!trackWaypoints.has(key)) return;
+        trackWaypoints.delete(key);
+        waypointPicking = false;
+        automaticTracksDirty = true;
+        redrawPlaced();
+        renderWaypointControls();
+        showWaypointStatus('経由点を解除し、番号順の通常の複線へ再敷設しました。');
       });
       routeCloseButton.addEventListener('click', closeRouteManager);
       routeEditTarget.addEventListener('change', fillRouteForm);
@@ -4208,10 +4423,10 @@
       svg.addEventListener('pointerleave', () => preview.setAttribute('visibility', 'hidden'));
       svg.addEventListener('pointerdown', event => {
         setSettingsOpen(false);
-        const hitGrip = rotationGripFromEvent(event);
-        const hitDepotGrip = !layingTrack ? depotRotationGripFromEvent(event) : null;
-        const hitStation = stationFromEvent(event);
-        const hitDepot = !layingTrack ? depotFromEvent(event) : null;
+        const hitGrip = !waypointPicking ? rotationGripFromEvent(event) : null;
+        const hitDepotGrip = !layingTrack && !waypointPicking ? depotRotationGripFromEvent(event) : null;
+        const hitStation = !waypointPicking ? stationFromEvent(event) : null;
+        const hitDepot = !layingTrack && !waypointPicking ? depotFromEvent(event) : null;
         if (event.pointerType === 'touch') {
           // OSの文字選択などでpointerupを受け損ねても、次の最初の指で復旧する。
           if (event.isPrimary && touches.size) {
@@ -4253,9 +4468,9 @@
             depotDragStart = null;
             depotRotationDragStart = null;
             if (touches.size === 1) selectStation(null);
-            pendingTouchPlacement = touches.size === 1 && (placing || placingDepot || layingTrack)
+            pendingTouchPlacement = touches.size === 1 && (placing || placingDepot || layingTrack || waypointPicking)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
-            panStart = touches.size === 1 && (mapMode === 'kariya' || layingTrack)
+            panStart = touches.size === 1 && (mapMode === 'kariya' || layingTrack || waypointPicking)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
           }
           pinchStart = null;
@@ -4278,7 +4493,7 @@
           beginRotationDrag(event, hitGrip);
         } else if (hitStation) {
           beginStationDrag(event, hitStation);
-        } else if ((mapMode === 'kariya' || layingTrack) && !placing && !placingDepot) {
+        } else if ((mapMode === 'kariya' || layingTrack || waypointPicking) && !placing && !placingDepot) {
           selectStation(null);
           mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
           svg.setPointerCapture(event.pointerId);
@@ -4291,7 +4506,7 @@
       });
       svg.addEventListener('pointerup', event => {
         if (event.pointerType !== 'touch') {
-          const tappedDestination = layingTrack && mousePanStart &&
+          const tappedDestination = (layingTrack || waypointPicking) && mousePanStart &&
             Math.hypot(event.clientX - mousePanStart.x, event.clientY - mousePanStart.y) <= TAP_SLOP;
           if (stationDragStart?.pointerId === event.pointerId) finishStationMove();
           const movedFacility = [stationDragStart, rotationDragStart, depotDragStart, depotRotationDragStart]
@@ -4307,7 +4522,10 @@
             updateStationEditor();
             updateDepotPanel();
           }
-          if (tappedDestination) selectTrackDestination(event);
+          if (tappedDestination) {
+            if (waypointPicking) setWaypointFromTap(event);
+            else selectTrackDestination(event);
+          }
           return;
         }
         const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
@@ -4340,7 +4558,8 @@
         beginPinch();
         if (depotTap !== null) selectDepot(depotTap);
         else if (tap) {
-          if (layingTrack) selectTrackDestination(event);
+          if (waypointPicking) setWaypointFromTap(event);
+          else if (layingTrack) selectTrackDestination(event);
           else if (placingDepot) placeDepot(event);
           else placeStation(event);
         }
@@ -4377,6 +4596,7 @@
       window.addEventListener('resize', fitCanvas);
       updateRouteSelectors();
       renderRouteList();
+      renderWaypointControls();
       updateServiceSelectors();
       renderServiceList();
       updateActiveConfig();
