@@ -52,6 +52,7 @@
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
     #board { display: block; width: 100%; height: 100%; touch-action: none; }
     #board.placing { cursor: crosshair; }
+    #board.placing-depot { cursor: crosshair; }
     #board.laying-track { cursor: crosshair; }
     .map-tiles, .map-markers { pointer-events: none; }
     .map-tiles { opacity: .62; }
@@ -91,6 +92,14 @@
       stroke: #fff; stroke-width: 3px; stroke-linejoin: round; paint-order: stroke;
     }
     .station-item { cursor: grab; }
+    .depot-item { cursor: pointer; }
+    .depot-shed { fill: #e8f1f4; fill-opacity: .85; stroke: #6495a3; }
+    .depot-item.selected .depot-shed { stroke: #2158a3; fill: #e0efff; }
+    .depot-rail { fill: none; stroke: #374b55; stroke-linecap: round; }
+    .depot-buffer { stroke: #374b55; stroke-linecap: round; }
+    .depot-car { stroke: #52657b; }
+    .depot-name { fill: #176079; font-size: 14px; font-weight: 800; text-anchor: middle; paint-order: stroke; stroke: #fff; stroke-width: 3px; }
+    .depot-hit { fill: transparent; pointer-events: all; }
     .station-item.selected .track { stroke: #2158a3; }
     .station-item.selected .platform { fill: #dce9ff; stroke: #2158a3; }
     .station-item.selected .platform-label, .station-item.selected .map-label { fill: #174c97; }
@@ -210,6 +219,17 @@
     .fleet-actions .fleet-run { background: #2158a3; border-color: #2158a3; color: #fff; }
     .fleet-actions button:disabled { opacity: .43; cursor: not-allowed; }
     .fleet-status { min-height: 32px; margin: 9px 0; font-size: 12px; line-height: 1.45; font-weight: 700; color: #194c89; }
+    .depot-panel {
+      position: absolute; z-index: 6; bottom: 54px; left: 14px;
+      width: min(380px, calc(100% - 28px)); max-height: 65dvh; overflow-y: auto;
+      padding: 14px; border: 1px solid #8bb8c7; border-radius: 14px;
+      background: #fffffff8; box-shadow: 0 8px 30px #15283f26;
+    }
+    .depot-panel[hidden] { display: none; }
+    .depot-info { margin: 10px 0; padding: 10px; border-radius: 9px; background: #f0f7f9; color: #285466; font-size: 12px; line-height: 1.6; }
+    .depot-buy { width: 100%; min-height: 46px; padding: 8px; background: #2158a3; color: #fff; border: 0; border-radius: 9px; font-size: 14px; font-weight: 800; cursor: pointer; }
+    .depot-buy:disabled { background: #aab6c2; cursor: not-allowed; }
+    .depot-status { min-height: 19px; margin: 9px 0; color: #194c89; font-size: 12px; line-height: 1.5; font-weight: 750; }
     .train-hud { position: absolute; z-index: 4; top: 66px; right: 14px; padding: 7px 10px; border: 1px solid #cbd8eb; border-radius: 9px; background: #ffffffeb; color: #203047; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; box-shadow: 0 2px 9px #15283f1a; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
@@ -223,6 +243,7 @@
       .station-editor { bottom: 46px; }
       .track-editor { bottom: 46px; }
       .fleet-panel { bottom: 46px; left: 10px; right: 10px; width: auto; max-height: 61dvh; }
+      .depot-panel { bottom: 46px; left: 10px; right: 10px; width: auto; max-height: 55dvh; }
       .train-hud { top: 57px; right: 10px; }
     }
   </style>
@@ -247,6 +268,13 @@
             <path d="M4 11C24 11 33 28 62 28M4 3C24 3 33 20 62 20" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
           </svg>
           複線
+        </button>
+        <button id="depot-tool" type="button" aria-pressed="false">
+          <svg viewBox="0 0 66 38" fill="none" aria-hidden="true">
+            <rect x="12" y="2" width="42" height="34" rx="4" stroke="currentColor" stroke-width="2" opacity=".5"/>
+            <path d="M33 4V34M26 8H40M26 30H40" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+          </svg>
+          車両基地
         </button>
         <button id="fleet-tool" type="button" aria-expanded="false" aria-controls="fleet-panel">
           <svg viewBox="0 0 66 38" fill="none" aria-hidden="true">
@@ -282,8 +310,8 @@
           </select>
         </div>
         <div class="length-control">
-          <label for="car-count">ホーム長</label>
-          <select id="car-count" aria-label="ホームの対応両数">
+          <label for="car-count">対応両数</label>
+          <select id="car-count" aria-label="駅・車両基地の対応両数">
             <option value="2">2両・40m</option>
             <option value="3">3両・60m</option>
             <option value="4">4両・80m</option>
@@ -312,6 +340,7 @@
         <g id="tracks" class="double-track"></g>
         <g id="track-preview" class="track-preview"></g>
         <g id="placed"></g>
+        <g id="depots"></g>
         <g id="train-layer" class="train-layer"></g>
         <g id="station-endpoints" class="station-endpoints"></g>
         <g id="preview" class="preview" visibility="hidden"></g>
@@ -417,6 +446,23 @@
         <p id="vehicle-status" class="fleet-status" role="status" aria-live="polite"></p>
         <p class="fleet-notes">※車両の全長はゲーム規則により1両20mで統一します。列車は片方の本線を走り、常用ブレーキで終点に停止します。高速域の加速力、曲線制限、勾配、信号・ポイント切替は近似または未対応です。実車の軌間は名鉄1,067mm／京王1,372mmで共通線路を走れません。現在は線路側の軌間設定がないため性能比較の仮試運転です。</p>
       </aside>
+      <aside class="depot-panel" id="depot-panel" aria-label="車両基地・新規列車の購入" hidden>
+        <div class="fleet-heading">
+          <h2 id="depot-heading">車両基地</h2>
+          <button id="depot-close" type="button" aria-label="車両基地を閉じる">×</button>
+        </div>
+        <p id="depot-info" class="depot-info">留置線1線・選択した両数の編成に対応</p>
+        <label class="fleet-field" for="depot-vehicle">購入する車両
+          <select id="depot-vehicle" aria-label="車両基地で購入する車両">
+            <option value="meitetsu2200">名鉄2200系・6両（120m）</option>
+            <option value="keio5000">京王5000系（2代）・10両（200m）</option>
+          </select>
+        </label>
+        <button id="depot-buy" class="depot-buy" type="button">この基地に1編成を購入</button>
+        <p id="depot-status" class="depot-status" role="status" aria-live="polite"></p>
+        <p id="depot-owned" class="fleet-notes"></p>
+        <p class="fleet-notes">※設定した両数×20mが留置有効長です（線路両端に各10mの余長）。価格・所持金は未設定のため、今回は購入登録（納入）のみ行います。1線に1編成まで。基地から本線への接続と営業運用は今後対応します。</p>
+      </aside>
       <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
         <div class="connection-panel">
@@ -455,9 +501,18 @@
       const trainLayer = document.querySelector('#train-layer');
       const stationEndpointsLayer = document.querySelector('#station-endpoints');
       const placed = document.querySelector('#placed');
+      const depotLayer = document.querySelector('#depots');
       const preview = document.querySelector('#preview');
       const button = document.querySelector('#place-tool');
       const trackButton = document.querySelector('#track-tool');
+      const depotButton = document.querySelector('#depot-tool');
+      const depotPanel = document.querySelector('#depot-panel');
+      const depotHeading = document.querySelector('#depot-heading');
+      const depotInfo = document.querySelector('#depot-info');
+      const depotVehicleSelect = document.querySelector('#depot-vehicle');
+      const depotBuyButton = document.querySelector('#depot-buy');
+      const depotStatus = document.querySelector('#depot-status');
+      const depotOwned = document.querySelector('#depot-owned');
       const fleetButton = document.querySelector('#fleet-tool');
       const fleetPanel = document.querySelector('#fleet-panel');
       const fleetCloseButton = document.querySelector('#fleet-close');
@@ -512,6 +567,8 @@
       const BASE_MAP_ZOOM = 13;
       const EARTH_RADIUS_METERS = 6378137; // 地理院タイルのWebメルカトル図法と同じ球体半径
       const CAR_LENGTH_METERS = 20;
+      const DEPOT_END_BUFFER_METERS = 10; // 留置有効長の両端に各10mの安全余長
+      const DEPOT_BLANK_UNITS_PER_METER = 1.2;
       // 営業上の最高速度と設計最高速度は別。加減速度の単位は km/h/s。
       // 高速域の詳細な引張力曲線は未公表のため、指定の基準速度から上は簡易出力一定近似。
       const ROLLING_STOCK = Object.freeze({
@@ -596,7 +653,13 @@
         { name: 'デンソー高棚製作所', lat: 34.95479, lon: 137.02911 }
       ];
       let placing = false;
+      let placingDepot = false;
       let layingTrack = false;
+      const depots = [];
+      let nextDepotId = 1;
+      let nextUnitId = 1;
+      let selectedDepotId = null;
+      let pendingDepotTap = null;
       const trackSections = [];
       let vehicleRun = null;
       let vehicleFrameId = null;
@@ -1823,6 +1886,165 @@
         return group;
       }
 
+      // 1線の留置線。有効長は2〜16両×20m、両端に各10mの余長を設ける。
+      function createDepot(x, y, city, latitude, depot = null) {
+        const group = document.createElementNS(SVG_NS, 'g');
+        group.setAttribute('transform', `translate(${x} ${y})`);
+        group.setAttribute('class', `depot-item${depot?.id === selectedDepotId ? ' selected' : ''}`);
+        if (depot) {
+          group.setAttribute('data-depot-id', String(depot.id));
+          group.setAttribute('aria-label', `車両基地${depot.id}／${floorLabel(depot.level)}／留置線1線${depot.carCount}両対応・有効長${depot.carCount * CAR_LENGTH_METERS}m／${depot.vehicleId ? ROLLING_STOCK[depot.vehicleId].name + 'を留置中' : '空線・タップして車両を購入'}`);
+        }
+        const meters = city ? canvasUnitsPerMeter(latitude) : DEPOT_BLANK_UNITS_PER_METER;
+        const carCount = depot?.carCount || selectedCars;
+        const width = (carCount * CAR_LENGTH_METERS + 2 * DEPOT_END_BUFFER_METERS) * meters;
+        const diagram = document.createElementNS(SVG_NS, 'g');
+        diagram.setAttribute('transform', 'rotate(90)');
+        const shed = document.createElementNS(SVG_NS, 'rect');
+        shed.setAttribute('class', 'depot-shed');
+        for (const [key, value] of Object.entries({ x: -width / 2, y: -9 * meters, width, height: 18 * meters,
+          rx: 2 * meters, 'stroke-width': .7 * meters })) shed.setAttribute(key, String(value));
+        diagram.append(shed);
+        const rail = document.createElementNS(SVG_NS, 'path');
+        rail.setAttribute('class', 'depot-rail');
+        rail.setAttribute('stroke-width', String(1.4 * meters));
+        rail.setAttribute('d', `M ${-width / 2} 0 H ${width / 2}`);
+        diagram.append(rail);
+        for (const end of [-1, 1]) {
+          const buffer = document.createElementNS(SVG_NS, 'line');
+          buffer.setAttribute('class', 'depot-buffer');
+          buffer.setAttribute('stroke-width', String(2 * meters));
+          buffer.setAttribute('x1', String(end * width / 2));
+          buffer.setAttribute('x2', String(end * width / 2));
+          buffer.setAttribute('y1', String(-5 * meters));
+          buffer.setAttribute('y2', String(5 * meters));
+          diagram.append(buffer);
+        }
+        const stock = ROLLING_STOCK[depot?.vehicleId];
+        if (stock) {
+          for (let carIndex = 0; carIndex < stock.cars; carIndex++) {
+            const car = document.createElementNS(SVG_NS, 'rect');
+            car.setAttribute('class', 'depot-car');
+            car.setAttribute('data-depot-car', String(carIndex + 1));
+            car.setAttribute('x', String((-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters));
+            car.setAttribute('y', String(-3.7 * meters));
+            car.setAttribute('width', String((CAR_LENGTH_METERS - 1) * meters));
+            car.setAttribute('height', String(7.4 * meters));
+            car.setAttribute('rx', String(.8 * meters));
+            car.setAttribute('stroke-width', String(.45 * meters));
+            car.setAttribute('fill', stock.id === 'keio5000' ? '#e7ecf4' : '#fff7f7');
+            diagram.append(car);
+            const stripe = document.createElementNS(SVG_NS, 'rect');
+            stripe.setAttribute('x', String((-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters));
+            stripe.setAttribute('y', String(1.3 * meters));
+            stripe.setAttribute('width', String((CAR_LENGTH_METERS - 1) * meters));
+            stripe.setAttribute('height', String(1.4 * meters));
+            stripe.setAttribute('fill', stock.id === 'keio5000' ? '#d94f7b' : '#c83b47');
+            diagram.append(stripe);
+          }
+        }
+        if (depot) {
+          const zoom = canvasSize.width / view.width;
+          const hit = document.createElementNS(SVG_NS, 'rect');
+          hit.setAttribute('class', 'depot-hit');
+          hit.setAttribute('x', String(-Math.max(width, 42 / zoom) / 2));
+          hit.setAttribute('y', String(-Math.max(18 * meters, 42 / zoom) / 2));
+          hit.setAttribute('width', String(Math.max(width, 42 / zoom)));
+          hit.setAttribute('height', String(Math.max(18 * meters, 42 / zoom)));
+          diagram.append(hit);
+        }
+        group.append(diagram);
+        const label = document.createElementNS(SVG_NS, 'text');
+        label.setAttribute('class', 'depot-name');
+        const zoom = canvasSize.width / view.width;
+        label.setAttribute('transform', `translate(0 ${-30 / zoom}) scale(${1 / zoom})`);
+        label.textContent = depot ? `車両基地${depot.id} · 1線 · ${carCount}両対応` : `車両基地 · ${carCount}両対応`;
+        group.append(label);
+        return group;
+      }
+
+      function depotFromEvent(event) {
+        const target = event.target?.closest?.('[data-depot-id]');
+        if (!target) return null;
+        return depots.find(depot => depot.id === Number(target.getAttribute('data-depot-id')) && isOnCurrentLevel(depot)) || null;
+      }
+
+      function selectedDepot() {
+        return depots.find(depot => depot.id === selectedDepotId && isOnCurrentLevel(depot)) || null;
+      }
+
+      function updateDepotPanel(message = '') {
+        const depot = selectedDepot();
+        depotPanel.hidden = !depot;
+        if (!depot) return;
+        const stock = ROLLING_STOCK[depot.vehicleId];
+        depotHeading.textContent = `車両基地${depot.id} · ${floorLabel(depot.level)}`;
+        const capacity = depot.carCount * CAR_LENGTH_METERS;
+        const proposed = ROLLING_STOCK[depotVehicleSelect.value];
+        const tooLong = proposed && proposed.cars > depot.carCount;
+        depotInfo.textContent = stock
+          ? `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／${stock.name} ${stock.cars}両を留置中／車両番号 ${depot.unitId}`
+          : `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／空線：新規列車を購入できます`;
+        depotBuyButton.disabled = !!stock || !!tooLong;
+        depotVehicleSelect.disabled = !!stock;
+        if (stock) depotVehicleSelect.value = stock.id;
+        depotStatus.textContent = message || (stock ? 'この基地は満線です。別の基地に購入してください。'
+          : tooLong ? `${proposed.cars}両編成は${depot.carCount}両対応の留置線に収容できません。` : '形式を選んで「購入」を押してください。');
+        const counts = Object.values(ROLLING_STOCK).map(model =>
+          `${model.name}：${depots.filter(item => item.vehicleId === model.id).length}編成`);
+        depotOwned.textContent = `保有編成：${counts.join(' ／ ')}`;
+      }
+
+      function selectDepot(id) {
+        selectedDepotId = id;
+        selectedStationId = null;
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
+        updateStationEditor();
+        updateDepotPanel();
+        redrawPlaced();
+      }
+
+      function closeDepotPanel() {
+        selectedDepotId = null;
+        depotPanel.hidden = true;
+        redrawPlaced();
+      }
+
+      function placeDepot(event) {
+        if (!placingDepot) return;
+        const raw = rawPointerOnCanvas(event);
+        if (!raw) return;
+        const half = (selectedCars * CAR_LENGTH_METERS + 2 * DEPOT_END_BUFFER_METERS) * DEPOT_BLANK_UNITS_PER_METER / 2 + 12;
+        const point = mapMode === 'kariya' ? raw : {
+          x: Math.max(36, Math.min(canvasSize.width - 36, raw.x)),
+          y: Math.max(half, Math.min(canvasSize.height - half, raw.y))
+        };
+        const depot = mapMode === 'kariya'
+          ? { id: nextDepotId++, mode: mapMode, level: currentLevel, carCount: selectedCars, ...canvasToGeo(point.x, point.y), vehicleId: null, unitId: null }
+          : { id: nextDepotId++, mode: mapMode, level: currentLevel, carCount: selectedCars,
+              xRatio: point.x / canvasSize.width, yRatio: point.y / canvasSize.height, vehicleId: null, unitId: null };
+        depots.push(depot);
+        selectDepot(depot.id);
+        preview.setAttribute('visibility', 'hidden');
+        hint.textContent = `車両基地${depot.id}（1線・${depot.carCount}両対応）を${floorLabel()}に建設しました。車両を購入できます`;
+      }
+
+      function purchaseDepotVehicle() {
+        const depot = selectedDepot();
+        const stock = ROLLING_STOCK[depotVehicleSelect.value];
+        if (!depot || !stock || depot.vehicleId) return;
+        if (stock.cars > depot.carCount) {
+          updateDepotPanel('この車両は留置線より長いため購入できません。');
+          return;
+        }
+        depot.vehicleId = stock.id;
+        depot.unitId = nextUnitId++;
+        updateDepotPanel(`${stock.name} ${stock.cars}両を購入登録し、車両基地${depot.id}に納入しました。`);
+        redrawPlaced();
+        hint.textContent = `${stock.name} ${stock.cars}両が車両基地${depot.id}に到着しました`;
+      }
+
       function selectedStation() {
         return positions.find(position => position.id === selectedStationId && isOnCurrentLevel(position));
       }
@@ -1844,6 +2066,10 @@
       }
 
       function selectStation(id) {
+        if (id !== null) {
+          selectedDepotId = null;
+          depotPanel.hidden = true;
+        }
         selectedStationId = id;
         redrawPlaced();
         updateStationEditor();
@@ -2130,6 +2356,13 @@
             position.carCount, false, MAP_CENTER.lat, position.rotation, position.id, position.name, position.level
           );
         }));
+        depotLayer.replaceChildren(...depots.filter(isOnCurrentLevel).map(depot => {
+          const point = mapMode === 'kariya' ? geoToCanvas(depot.lon, depot.lat) : {
+            x: depot.xRatio * canvasSize.width,
+            y: depot.yRatio * canvasSize.height
+          };
+          return createDepot(point.x, point.y, mapMode === 'kariya', depot.lat || MAP_CENTER.lat, depot);
+        }));
         renderStationEndpoints();
         renderVehicleTrain();
         renderCatchmentRings();
@@ -2165,18 +2398,22 @@
       }
 
       function showPreview(event) {
-        if (!placing || touches.size || event.pointerType === 'touch') return;
-        const point = pointerOnCanvas(event);
+        if ((!placing && !placingDepot) || touches.size || event.pointerType === 'touch') return;
+        const point = placing ? pointerOnCanvas(event) : rawPointerOnCanvas(event);
         if (!point) return;
         const latitude = mapMode === 'kariya' ? canvasToGeo(point.x, point.y).lat : MAP_CENTER.lat;
-        preview.replaceChildren(createStation(point.x, point.y, selectedCars, mapMode === 'kariya', latitude));
+        preview.replaceChildren(placing
+          ? createStation(point.x, point.y, selectedCars, mapMode === 'kariya', latitude)
+          : createDepot(point.x, point.y, mapMode === 'kariya', latitude));
         preview.setAttribute('visibility', 'visible');
       }
 
       button.addEventListener('click', () => {
+        closeDepotPanel();
         fleetPanel.hidden = true;
         fleetButton.setAttribute('aria-expanded', 'false');
         placing = !placing;
+        placingDepot = false;
         layingTrack = false;
         trackDestination = null;
         trackTargetStation = null;
@@ -2184,7 +2421,9 @@
         trackEditor.hidden = true;
         trackPreview.replaceChildren();
         trackButton.setAttribute('aria-pressed', 'false');
+        depotButton.setAttribute('aria-pressed', 'false');
         svg.classList.toggle('laying-track', false);
+        svg.classList.toggle('placing-depot', false);
         button.setAttribute('aria-pressed', String(placing));
         svg.classList.toggle('placing', placing);
         preview.setAttribute('visibility', 'hidden');
@@ -2194,16 +2433,20 @@
       });
 
       trackButton.addEventListener('click', () => {
+        closeDepotPanel();
         fleetPanel.hidden = true;
         fleetButton.setAttribute('aria-expanded', 'false');
         layingTrack = !layingTrack;
         placing = false;
+        placingDepot = false;
         trackDestination = null;
         trackTargetStation = null;
         connectionDialog.hidden = true;
         trackEditor.hidden = !layingTrack;
         button.setAttribute('aria-pressed', 'false');
+        depotButton.setAttribute('aria-pressed', 'false');
         svg.classList.toggle('placing', false);
+        svg.classList.toggle('placing-depot', false);
         trackButton.setAttribute('aria-pressed', String(layingTrack));
         svg.classList.toggle('laying-track', layingTrack);
         preview.setAttribute('visibility', 'hidden');
@@ -2215,6 +2458,36 @@
           : '「複線」で駅から線路を延ばせます';
       });
 
+      depotButton.addEventListener('click', () => {
+        const next = !placingDepot;
+        closeDepotPanel();
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
+        placingDepot = next;
+        placing = false;
+        layingTrack = false;
+        trackEditor.hidden = true;
+        trackDestination = null;
+        trackTargetStation = null;
+        trackPreview.replaceChildren();
+        connectionDialog.hidden = true;
+        button.setAttribute('aria-pressed', 'false');
+        trackButton.setAttribute('aria-pressed', 'false');
+        depotButton.setAttribute('aria-pressed', String(next));
+        svg.classList.toggle('placing', false);
+        svg.classList.toggle('laying-track', false);
+        svg.classList.toggle('placing-depot', next);
+        preview.setAttribute('visibility', 'hidden');
+        selectStation(null);
+        updateStationEditor();
+        redrawPlaced();
+        hint.textContent = next ? `空いた場所をタップして、${selectedCars}両対応・1線の車両基地を配置してください` : '車両基地をタップすると新規列車を購入できます';
+      });
+
+      document.querySelector('#depot-close').addEventListener('click', closeDepotPanel);
+      depotBuyButton.addEventListener('click', purchaseDepotVehicle);
+      depotVehicleSelect.addEventListener('change', () => updateDepotPanel());
+
       trackOriginSelect.addEventListener('change', () => {
         trackDestination = null;
         trackTargetStation = null;
@@ -2222,11 +2495,13 @@
         renderTrackPreview();
       });
       fleetButton.addEventListener('click', () => {
+        closeDepotPanel();
         const opening = fleetPanel.hidden;
         fleetPanel.hidden = !opening;
         fleetButton.setAttribute('aria-expanded', String(opening));
         if (!opening) return;
         placing = false;
+        placingDepot = false;
         layingTrack = false;
         trackEditor.hidden = true;
         trackPreview.replaceChildren();
@@ -2235,7 +2510,9 @@
         connectionDialog.hidden = true;
         button.setAttribute('aria-pressed', 'false');
         trackButton.setAttribute('aria-pressed', 'false');
+        depotButton.setAttribute('aria-pressed', 'false');
         svg.classList.toggle('placing', false);
+        svg.classList.toggle('placing-depot', false);
         svg.classList.toggle('laying-track', false);
         preview.setAttribute('visibility', 'hidden');
         selectStation(null);
@@ -2312,15 +2589,20 @@
       lengthSelect.addEventListener('change', () => {
         selectedCars = Number(lengthSelect.value);
         preview.setAttribute('visibility', 'hidden');
-        hint.textContent = placing ? `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを好きな場所に配置` : `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを選択中`;
+        hint.textContent = placingDepot ? `${selectedCars}両対応・有効長${selectedCars * CAR_LENGTH_METERS}m・1線の車両基地を配置`
+          : placing ? `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）のホームを好きな場所に配置`
+            : `${selectedCars}両（${selectedCars * CAR_LENGTH_METERS}m）を選択中`;
       });
 
       modeSelect.addEventListener('change', () => {
         if (vehicleRun) stopVehicleRun(false);
+        selectedDepotId = null;
+        depotPanel.hidden = true;
         mapMode = modeSelect.value;
         selectedStationId = null;
         stationDragStart = null;
         rotationDragStart = null;
+        pendingDepotTap = null;
         trackPreview.replaceChildren();
         trackDestination = null;
         trackTargetStation = null;
@@ -2340,6 +2622,8 @@
         if (!location) return;
         const point = geoToCanvas(location.lon, location.lat);
         selectedStationId = null;
+        selectedDepotId = null;
+        depotPanel.hidden = true;
         trackDestination = null;
         trackTargetStation = null;
         stationDragStart = null;
@@ -2355,10 +2639,13 @@
 
       floorSelect.addEventListener('change', () => {
         if (vehicleRun) stopVehicleRun(false);
+        selectedDepotId = null;
+        depotPanel.hidden = true;
         currentLevel = Number(floorSelect.value);
         selectedStationId = null;
         stationDragStart = null;
         rotationDragStart = null;
+        pendingDepotTap = null;
         mousePanStart = null;
         panStart = null;
         pinchStart = null;
@@ -2411,10 +2698,14 @@
               Math.hypot(touch.x - pendingTouchPlacement.x, touch.y - pendingTouchPlacement.y) > TAP_SLOP) {
             pendingTouchPlacement = null;
           }
+          if (pendingDepotTap && pendingDepotTap.id === event.pointerId &&
+              Math.hypot(touch.x - pendingDepotTap.x, touch.y - pendingDepotTap.y) > TAP_SLOP) {
+            pendingDepotTap = null;
+          }
           if (touches.size === 1 && panStart && panStart.id === event.pointerId) {
             const dx = touch.x - panStart.x;
             const dy = touch.y - panStart.y;
-            if (!placing || Math.hypot(dx, dy) > TAP_SLOP) {
+            if ((!placing && !placingDepot) || Math.hypot(dx, dy) > TAP_SLOP) {
               const bounds = svg.getBoundingClientRect();
               applyView({
                 x: panStart.view.x - dx / bounds.width * panStart.view.width,
@@ -2442,10 +2733,17 @@
       svg.addEventListener('pointerdown', event => {
         const hitGrip = rotationGripFromEvent(event);
         const hitStation = stationFromEvent(event);
+        const hitDepot = !layingTrack ? depotFromEvent(event) : null;
         if (event.pointerType === 'touch') {
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
-          if (!layingTrack && touches.size === 1 && hitGrip) {
+          if (touches.size === 1 && hitDepot) {
+            pendingDepotTap = { id: event.pointerId, depotId: hitDepot.id, x: event.clientX, y: event.clientY };
+            pendingTouchPlacement = null;
+            stationDragStart = null;
+            rotationDragStart = null;
+            panStart = null;
+          } else if (!layingTrack && touches.size === 1 && hitGrip) {
             beginRotationDrag(event, hitGrip);
             pendingTouchPlacement = null;
             panStart = null;
@@ -2457,7 +2755,7 @@
             stationDragStart = null;
             rotationDragStart = null;
             if (touches.size === 1) selectStation(null);
-            pendingTouchPlacement = touches.size === 1 && (placing || layingTrack)
+            pendingTouchPlacement = touches.size === 1 && (placing || placingDepot || layingTrack)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY } : null;
             panStart = touches.size === 1 && (mapMode === 'kariya' || layingTrack)
               ? { id: event.pointerId, x: event.clientX, y: event.clientY, view: { ...view } } : null;
@@ -2469,20 +2767,24 @@
           return;
         }
         if (event.button !== 0) return;
-        if (layingTrack) {
+        if (hitDepot) {
+          selectDepot(hitDepot.id);
+          preview.setAttribute('visibility', 'hidden');
+        } else if (layingTrack) {
           mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
           svg.setPointerCapture(event.pointerId);
         } else if (hitGrip) {
           beginRotationDrag(event, hitGrip);
         } else if (hitStation) {
           beginStationDrag(event, hitStation);
-        } else if ((mapMode === 'kariya' || layingTrack) && !placing) {
+        } else if ((mapMode === 'kariya' || layingTrack) && !placing && !placingDepot) {
           selectStation(null);
           mousePanStart = { x: event.clientX, y: event.clientY, view: { ...view } };
           svg.setPointerCapture(event.pointerId);
         } else {
           selectStation(null);
-          placeStation(event);
+          if (placingDepot) placeDepot(event);
+          else placeStation(event);
         }
         event.preventDefault();
       });
@@ -2499,6 +2801,9 @@
         }
         const finishedStationDrag = stationDragStart?.pointerId === event.pointerId;
         const finishedRotationDrag = rotationDragStart?.pointerId === event.pointerId;
+        const depotTap = pendingDepotTap?.id === event.pointerId && touches.size === 1 &&
+          Math.hypot(event.clientX - pendingDepotTap.x, event.clientY - pendingDepotTap.y) <= TAP_SLOP
+          ? pendingDepotTap.depotId : null;
         const tap = pendingTouchPlacement && pendingTouchPlacement.id === event.pointerId &&
           touches.size === 1 &&
           Math.hypot(event.clientX - pendingTouchPlacement.x,
@@ -2508,11 +2813,14 @@
         if (finishedStationDrag) stationDragStart = null;
         if (finishedRotationDrag) rotationDragStart = null;
         pendingTouchPlacement = null;
+        pendingDepotTap = null;
         pinchStart = null;
         panStart = null;
         beginPinch();
-        if (tap) {
+        if (depotTap !== null) selectDepot(depotTap);
+        else if (tap) {
           if (layingTrack) selectTrackDestination(event);
+          else if (placingDepot) placeDepot(event);
           else placeStation(event);
         }
         event.preventDefault();
@@ -2522,6 +2830,7 @@
         if (stationDragStart?.pointerId === event.pointerId) stationDragStart = null;
         if (rotationDragStart?.pointerId === event.pointerId) rotationDragStart = null;
         pendingTouchPlacement = null;
+        pendingDepotTap = null;
         pinchStart = null;
         panStart = null;
         mousePanStart = null;

@@ -43,7 +43,8 @@ class Element {
 
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
-  '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
+  '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
+  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
   '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
@@ -61,6 +62,7 @@ nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
 nodes['#vehicle-model'].value = 'meitetsu2200';
+nodes['#depot-vehicle'].value = 'meitetsu2200';
 nodes['#vehicle-speed'].value = '5';
 nodes['#fleet-panel'].hidden = true;
 const board = nodes['#board'];
@@ -495,4 +497,78 @@ nodes['#vehicle-run'].dispatch('click');
 assert.equal(nodes['#train-layer'].children.length, 6, 'six-car train fits the 120m platform');
 nodes['#vehicle-stop'].dispatch('click');
 
-console.log('Track construction, X crossovers, six floors, rolling-stock specifications, 20m/car and measured train trial runs OK');
+// 1-track depots are placed independently of station and track tools.
+const routesBeforeDepot = routes().length;
+const stationsBeforeDepot = nodes['#placed'].children.length;
+nodes['#depot-tool'].dispatch('click');
+assert.equal(nodes['#depot-tool'].attributes['aria-pressed'], 'true');
+assert.equal(nodes['#place-tool'].attributes['aria-pressed'], 'false');
+assert.equal(nodes['#track-tool'].attributes['aria-pressed'], 'false');
+mouseTap(110, 210);
+assert.equal(nodes['#depots'].children.length, 1, 'depot builds a separate mapped object');
+assert.equal(routes().length, routesBeforeDepot, 'depot construction does not create unrelated mainline tracks');
+assert.equal(nodes['#placed'].children.length, stationsBeforeDepot, 'depot does not become a passenger station');
+assert.equal(nodes['#depot-panel'].hidden, false, 'purchase sheet appears after building a depot');
+assert.match(nodes['#depot-info'].textContent, /留置線1線・6両対応（有効長120m）/);
+const depotOne = nodes['#depots'].children[0];
+assert.equal(depotOne.children[0].children.filter(child => child.attributes.class === 'depot-rail').length, 1,
+  'the depot has exactly one storage track');
+assert.equal(depotOne.children[0].attributes.transform, 'rotate(90)', 'depot is vertical like stations');
+nodes['#depot-vehicle'].value = 'keio5000';
+nodes['#depot-vehicle'].dispatch('change');
+assert.equal(nodes['#depot-buy'].disabled, true, 'six-car siding forbids a ten-car purchase');
+assert.match(nodes['#depot-status'].textContent, /10両編成は6両対応/);
+nodes['#depot-buy'].dispatch('click');
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 0,
+  'the length constraint is also enforced in the purchase handler');
+nodes['#depot-vehicle'].value = 'meitetsu2200';
+nodes['#depot-vehicle'].dispatch('change');
+nodes['#depot-buy'].dispatch('click');
+assert.match(nodes['#depot-status'].textContent, /名鉄2200系 6両を購入登録/);
+assert.equal(nodes['#depot-buy'].disabled, true, 'occupied one-track depot rejects another purchase');
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 6);
+const depotOneCars = nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']);
+assert.ok(Math.abs(Number(depotOneCars[0].attributes.width) /
+  Number(nodes['#depots'].children[0].children[0].children[0].attributes.width) - 19 / 140) < 1e-8,
+  'car drawings use 20m pitch and one-meter coupler spacing on the real-scale map');
+nodes['#depot-buy'].dispatch('click');
+assert.match(nodes['#depot-owned'].textContent, /名鉄2200系：1編成/);
+
+// On iPhone/touch, tapping an existing depot opens purchase rather than building another.
+nodes['#depot-close'].dispatch('click');
+const depotTarget = nodes['#depots'].children[0].children[0].children.at(-1);
+board.dispatch('pointerdown', { pointerType: 'touch', pointerId: 200, clientX: 110, clientY: 210,
+  button: 0, target: depotTarget, preventDefault() {} });
+board.dispatch('pointerup', { pointerType: 'touch', pointerId: 200, clientX: 110, clientY: 210,
+  button: 0, target: depotTarget, preventDefault() {} });
+assert.equal(nodes['#depot-panel'].hidden, false);
+assert.equal(nodes['#depots'].children.length, 1, 'touch did not accidentally add a second depot');
+
+// A second one-track depot can accommodate a ten-car Keio train.
+nodes['#car-count'].value = '10';
+nodes['#car-count'].dispatch('change');
+mouseTap(300, 210);
+assert.equal(nodes['#depots'].children.length, 2);
+assert.match(nodes['#depot-info'].textContent, /10両対応（有効長200m）/);
+nodes['#depot-vehicle'].value = 'keio5000';
+nodes['#depot-vehicle'].dispatch('change');
+nodes['#depot-buy'].dispatch('click');
+assert.match(nodes['#depot-status'].textContent, /京王5000系（2代） 10両を購入登録/);
+assert.equal(nodes['#depots'].children[1].children[0].children.filter(child => child.attributes['data-depot-car']).length, 10);
+assert.match(nodes['#depot-owned'].textContent, /京王5000系（2代）：1編成/);
+
+// Current-map/current-floor filtering is the same as for stations and tracks.
+nodes['#floor-level'].value = '-4';
+nodes['#floor-level'].dispatch('change');
+assert.equal(nodes['#depots'].children.length, 0, 'B5 depots do not leak onto B4');
+nodes['#floor-level'].value = '-5';
+nodes['#floor-level'].dispatch('change');
+assert.equal(nodes['#depots'].children.length, 2, 'purchased depot trains survive changing floors');
+nodes['#map-mode'].value = 'blank';
+nodes['#map-mode'].dispatch('change');
+assert.equal(nodes['#depots'].children.length, 0, 'city depots stay out of the blank map');
+nodes['#map-mode'].value = 'kariya';
+nodes['#map-mode'].dispatch('change');
+assert.equal(nodes['#depots'].children.length, 2);
+
+console.log('Tracks, six floors, two train models, depot placement, one-track capacity, purchase and touch selection OK');
