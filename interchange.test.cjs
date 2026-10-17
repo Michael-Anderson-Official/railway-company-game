@@ -38,7 +38,7 @@ class Element {
 
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed',
-  '#station-endpoints', '#depots', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level',
+  '#station-endpoints', '#depots', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level',
   '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
   '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',

@@ -43,7 +43,7 @@ class Element {
 
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
-  '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
+  '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
   '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
   '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
@@ -145,8 +145,14 @@ function checkCrossovers(section, ends) {
 function commit() { nodes['#build-track'].dispatch('click'); }
 
 assert.equal(routes().length, 0);
+assert.match(nodes['#active-config'].textContent, /地下1階.*10両.*3市の地図/);
+nodes['#settings-toggle'].dispatch('click');
+assert.equal(nodes['#settings-toggle'].getAttribute('aria-expanded'), 'true', 'settings can be opened');
 nodes['#place-tool'].dispatch('click');
+assert.equal(nodes['#settings-toggle'].getAttribute('aria-expanded'), 'false', 'choosing a tool closes settings');
 assert.equal(nodes['#place-tool'].attributes['aria-pressed'], 'true');
+assert.match(html, /@media\(max-width: 1180px\)[\s\S]*?\.tool \{\s*position: fixed/, 'mobile dock floats over the map');
+assert.match(html, /\.tool\.settings-open \.settings-fields \{ display: grid; \}/, 'mobile settings are collapsible');
 nodes['#track-tool'].dispatch('click');
 assert.equal(nodes['#place-tool'].attributes['aria-pressed'], 'false');
 assert.equal(nodes['#track-tool'].attributes['aria-pressed'], 'true');
