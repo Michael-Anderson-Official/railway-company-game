@@ -67,6 +67,9 @@
     .scissors-crossover .crossover-rail { fill: none; stroke: #27384d; stroke-linecap: round; stroke-linejoin: round; }
     .track-preview path { fill: none; stroke: #3274cf; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5; }
     .track-preview .track-target { fill: #fff; stroke: #3274cf; }
+    .train-layer { pointer-events: none; }
+    .train-car { stroke: #27384d; stroke-width: 1; }
+    .train-window { fill: #a5cee8; opacity: .85; }
     .station-endpoints { pointer-events: none; }
     .station-endpoint { fill: #fff; stroke: #1676bc; stroke-width: 2.5; }
     .station-endpoint.occupied { fill: #8a99aa; stroke: #fff; }
@@ -179,6 +182,35 @@
     .connection-actions { display: flex; gap: 10px; margin-top: 20px; }
     .connection-actions button { flex: 1; min-height: 48px; border-radius: 9px; border: 1px solid #d0d9e7; background: white; font-size: 15px; font-weight: 800; }
     .connection-actions .confirm { background: #2158a3; border-color: #2158a3; color: white; }
+    .fleet-panel {
+      position: absolute; z-index: 5; right: 14px; bottom: 54px;
+      width: min(390px, calc(100% - 28px)); max-height: min(72dvh, 650px);
+      overflow-y: auto; padding: 14px; border: 1px solid #b7cbe8;
+      border-radius: 14px; background: #fffffff7; box-shadow: 0 8px 30px #15283f26;
+    }
+    .fleet-panel[hidden], .train-hud[hidden] { display: none; }
+    .fleet-heading { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+    .fleet-heading h2 { margin: 0; font-size: 16px; }
+    .fleet-heading button { border: 0; background: transparent; color: #64758a; font-size: 25px; min-width: 34px; cursor: pointer; }
+    .fleet-field { display: grid; gap: 5px; margin: 11px 0; font-size: 12px; font-weight: 700; color: #516176; }
+    .fleet-field select { width: 100%; min-height: 41px; padding: 8px; border: 1px solid #cbd8eb; border-radius: 8px; background: #fff; color: #203047; font: inherit; font-size: 16px; }
+    .fleet-preview { display: flex; gap: 2px; margin: 12px 0; padding: 8px 0; overflow: hidden; }
+    .fleet-preview-car { flex: 1; min-width: 0; height: 21px; border: 1px solid #64758a; border-radius: 3px; background: #e8edf2; position: relative; }
+    .fleet-preview-car::after { content: ''; position: absolute; top: 4px; left: 12%; right: 12%; height: 6px; border-radius: 1px; background: #87b9d5; }
+    .fleet-preview-car.meitetsu-special { background: linear-gradient(#f7f7f7 65%, #cc3544 65%, #cc3544 84%, #f7f7f7 84%); }
+    .fleet-preview-car.meitetsu-general { background: linear-gradient(#f7f7f7 65%, #cc3544 65%, #cc3544 84%, #c6c9cf 84%); }
+    .fleet-preview-car.keio { background: linear-gradient(#e5eaef 66%, #d64b78 66%, #d64b78 86%, #e5eaef 86%); }
+    .fleet-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 7px 12px; margin: 4px 0 12px; }
+    .fleet-stats div { padding: 7px 9px; background: #f2f6fb; border-radius: 8px; }
+    .fleet-stats dt { font-size: 10px; color: #64758a; }
+    .fleet-stats dd { margin: 2px 0 0; font-size: 14px; font-weight: 800; color: #223b57; font-variant-numeric: tabular-nums; }
+    .fleet-notes { font-size: 11px; line-height: 1.55; color: #65758a; }
+    .fleet-actions { display: flex; flex-wrap: wrap; gap: 7px; margin: 10px 0; }
+    .fleet-actions button { flex: 1; min-height: 42px; border: 1px solid #cbd8eb; border-radius: 8px; background: #fff; color: #203047; font-weight: 800; cursor: pointer; }
+    .fleet-actions .fleet-run { background: #2158a3; border-color: #2158a3; color: #fff; }
+    .fleet-actions button:disabled { opacity: .43; cursor: not-allowed; }
+    .fleet-status { min-height: 32px; margin: 9px 0; font-size: 12px; line-height: 1.45; font-weight: 700; color: #194c89; }
+    .train-hud { position: absolute; z-index: 4; top: 66px; right: 14px; padding: 7px 10px; border: 1px solid #cbd8eb; border-radius: 9px; background: #ffffffeb; color: #203047; font-size: 12px; font-weight: 800; font-variant-numeric: tabular-nums; box-shadow: 0 2px 9px #15283f1a; }
     @media(max-width: 700px) {
       .header { align-items: flex-start; flex-direction: column; gap: 12px; padding: 13px 16px; }
       .tool { width: 100%; flex-wrap: wrap; gap: 8px 10px; }
@@ -190,6 +222,8 @@
       .map-credit { right: 7px; bottom: 4px; font-size: 9px; }
       .station-editor { bottom: 46px; }
       .track-editor { bottom: 46px; }
+      .fleet-panel { bottom: 46px; left: 10px; right: 10px; width: auto; max-height: 61dvh; }
+      .train-hud { top: 57px; right: 10px; }
     }
   </style>
 </head>
@@ -213,6 +247,13 @@
             <path d="M4 11C24 11 33 28 62 28M4 3C24 3 33 20 62 20" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
           </svg>
           複線
+        </button>
+        <button id="fleet-tool" type="button" aria-expanded="false" aria-controls="fleet-panel">
+          <svg viewBox="0 0 66 38" fill="none" aria-hidden="true">
+            <rect x="4" y="8" width="58" height="22" rx="5" stroke="currentColor" stroke-width="2.5"/>
+            <path d="M13 15H53M13 22H53M16 31L13 36M50 31L53 36" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
+          </svg>
+          車両
         </button>
         <div class="length-control">
           <label for="map-mode">地図</label>
@@ -271,6 +312,7 @@
         <g id="tracks" class="double-track"></g>
         <g id="track-preview" class="track-preview"></g>
         <g id="placed"></g>
+        <g id="train-layer" class="train-layer"></g>
         <g id="station-endpoints" class="station-endpoints"></g>
         <g id="preview" class="preview" visibility="hidden"></g>
       </svg>
@@ -341,8 +383,41 @@
         <p class="track-note" id="track-destination">接続先の駅の上端・下端をタップしてください。駅以外の場所も終点にできます。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">上り側／下り側は仮の呼称です。駅端へ複線を接続すると、X字型の渡り線を自動設置します。ポイントの切替・列車運行は未実装です。ドラッグは地図移動、2本指は拡大縮小。</p>
+        <p class="track-note">上り側／下り側は仮の呼称です。駅端にX字型渡り線を設置します。試運転は「車両」から行えますが、ポイント切替・営業ダイヤ運行は未実装です。ドラッグは地図移動、2本指は拡大縮小。</p>
       </div>
+      <aside class="fleet-panel" id="fleet-panel" aria-label="車両カタログと試運転" hidden>
+        <div class="fleet-heading">
+          <h2>車両カタログ・試運転</h2>
+          <button id="fleet-close" type="button" aria-label="車両カタログを閉じる">×</button>
+        </div>
+        <label class="fleet-field" for="vehicle-model">車両形式
+          <select id="vehicle-model" aria-label="試運転する車両形式">
+            <option value="meitetsu2200">名鉄2200系｜6両・120m</option>
+            <option value="keio5000">京王5000系（2代）｜10両・200m</option>
+          </select>
+        </label>
+        <div id="fleet-preview" class="fleet-preview" role="img" aria-label="編成の模式図"></div>
+        <dl class="fleet-stats" id="fleet-stats"></dl>
+        <p id="fleet-description" class="fleet-notes"></p>
+        <label class="fleet-field" for="vehicle-route">試運転区間（現在の階層・地図）
+          <select id="vehicle-route" aria-label="試運転する複線"></select>
+        </label>
+        <label class="fleet-field" for="vehicle-speed">再生速度
+          <select id="vehicle-speed" aria-label="試運転の再生速度">
+            <option value="1">現実時間（1倍）</option>
+            <option value="5" selected>5倍速</option>
+            <option value="10">10倍速</option>
+          </select>
+        </label>
+        <div class="fleet-actions">
+          <button id="vehicle-run" class="fleet-run" type="button">試運転開始</button>
+          <button id="vehicle-stop" type="button" disabled>終了・リセット</button>
+          <button id="vehicle-emergency" type="button" disabled>非常ブレーキ</button>
+        </div>
+        <p id="vehicle-status" class="fleet-status" role="status" aria-live="polite"></p>
+        <p class="fleet-notes">※車両の全長はゲーム規則により1両20mで統一します。列車は片方の本線を走り、常用ブレーキで終点に停止します。高速域の加速力、曲線制限、勾配、信号・ポイント切替は近似または未対応です。実車の軌間は名鉄1,067mm／京王1,372mmで共通線路を走れません。現在は線路側の軌間設定がないため性能比較の仮試運転です。</p>
+      </aside>
+      <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
         <div class="connection-panel">
           <h2 id="connection-question"></h2>
@@ -377,11 +452,26 @@
       const catchmentRings = document.querySelector('#catchment-rings');
       const tracksLayer = document.querySelector('#tracks');
       const trackPreview = document.querySelector('#track-preview');
+      const trainLayer = document.querySelector('#train-layer');
       const stationEndpointsLayer = document.querySelector('#station-endpoints');
       const placed = document.querySelector('#placed');
       const preview = document.querySelector('#preview');
       const button = document.querySelector('#place-tool');
       const trackButton = document.querySelector('#track-tool');
+      const fleetButton = document.querySelector('#fleet-tool');
+      const fleetPanel = document.querySelector('#fleet-panel');
+      const fleetCloseButton = document.querySelector('#fleet-close');
+      const vehicleModelSelect = document.querySelector('#vehicle-model');
+      const vehicleRouteSelect = document.querySelector('#vehicle-route');
+      const vehicleSpeedSelect = document.querySelector('#vehicle-speed');
+      const vehiclePreview = document.querySelector('#fleet-preview');
+      const vehicleStats = document.querySelector('#fleet-stats');
+      const vehicleDescription = document.querySelector('#fleet-description');
+      const vehicleRunButton = document.querySelector('#vehicle-run');
+      const vehicleStopButton = document.querySelector('#vehicle-stop');
+      const vehicleEmergencyButton = document.querySelector('#vehicle-emergency');
+      const vehicleStatus = document.querySelector('#vehicle-status');
+      const trainHud = document.querySelector('#train-hud');
       const modeSelect = document.querySelector('#map-mode');
       const mapFocusControl = document.querySelector('#map-focus-control');
       const mapFocusSelect = document.querySelector('#map-focus');
@@ -422,6 +512,30 @@
       const BASE_MAP_ZOOM = 13;
       const EARTH_RADIUS_METERS = 6378137; // 地理院タイルのWebメルカトル図法と同じ球体半径
       const CAR_LENGTH_METERS = 20;
+      // 営業上の最高速度と設計最高速度は別。加減速度の単位は km/h/s。
+      // 高速域の詳細な引張力曲線は未公表のため、指定の基準速度から上は簡易出力一定近似。
+      const ROLLING_STOCK = Object.freeze({
+        meitetsu2200: Object.freeze({
+          id: 'meitetsu2200', name: '名鉄2200系', operator: '名古屋鉄道',
+          cars: 6, carLengthMeters: CAR_LENGTH_METERS, gaugeMm: 1067,
+          maxServiceKmh: 120, designSpeedKmh: 130,
+          accelerationKmhps: 2.3, accelerationReferenceKmh: 65,
+          serviceDecelerationKmhps: 3.5, emergencyDecelerationKmhps: 4.2,
+          voltageV: 1500, motorPowerKw: 2040,
+          carTypes: ['meitetsu-special', 'meitetsu-special', 'meitetsu-general', 'meitetsu-general', 'meitetsu-general', 'meitetsu-general'],
+          description: '特別車2両＋一般車4両の一部特別車特急。起動加速度2.3km/h/sは65km/hまでの公表値です。車体はゲーム上の統一規格（1両20m）で表示します。'
+        }),
+        keio5000: Object.freeze({
+          id: 'keio5000', name: '京王5000系（2代）', operator: '京王電鉄',
+          cars: 10, carLengthMeters: CAR_LENGTH_METERS, gaugeMm: 1372,
+          maxServiceKmh: 110, designSpeedKmh: 130,
+          accelerationKmhps: 3.3, accelerationReferenceKmh: 65,
+          serviceDecelerationKmhps: 4.0, emergencyDecelerationKmhps: 4.5,
+          voltageV: 1500, motorPowerKw: 3600,
+          carTypes: Array(10).fill('keio'),
+          description: '6M4T・10両固定編成。ロング／クロス転換座席で京王ライナーにも使用されます。高速域での加速低下開始速度65km/hは試運転用の仮定です。'
+        })
+      });
       // 4mは地下鉄車両の仕様が未決定のための設計仮定。国交省の一律規定値ではない。
       const DOUBLE_TRACK_SPACING_METERS = 4;
       const BLANK_TRACK_SPACING = 16;
@@ -484,6 +598,8 @@
       let placing = false;
       let layingTrack = false;
       const trackSections = [];
+      let vehicleRun = null;
+      let vehicleFrameId = null;
       let nextTrackSectionId = 1;
       let availableTrackOrigins = [];
       let trackDestination = null;
@@ -1244,6 +1360,263 @@
         renderTrackPreview();
       }
 
+      function selectedVehicle() {
+        return ROLLING_STOCK[vehicleModelSelect.value] || ROLLING_STOCK.meitetsu2200;
+      }
+
+      function renderVehicleCatalog() {
+        const vehicle = selectedVehicle();
+        vehiclePreview.setAttribute('aria-label', `${vehicle.name}・${vehicle.cars}両編成（1両20m）`);
+        vehiclePreview.replaceChildren(...vehicle.carTypes.map(type => {
+          const car = document.createElement('span');
+          car.setAttribute('class', `fleet-preview-car ${type}`);
+          return car;
+        }));
+        const specs = [
+          ['編成', `${vehicle.cars}両・${vehicle.cars * vehicle.carLengthMeters}m`],
+          ['営業最高速度', `${vehicle.maxServiceKmh} km/h`],
+          ['設計最高速度', `${vehicle.designSpeedKmh} km/h`],
+          ['起動加速度', `${vehicle.accelerationKmhps} km/h/s`],
+          ['常用最大減速度', `${vehicle.serviceDecelerationKmhps} km/h/s`],
+          ['非常減速度', `${vehicle.emergencyDecelerationKmhps} km/h/s`],
+          ['軌間（実車）', `${vehicle.gaugeMm.toLocaleString('ja-JP')} mm`],
+          ['架線電圧', `直流${vehicle.voltageV.toLocaleString('ja-JP')} V`],
+          ['編成主電動機出力', `${vehicle.motorPowerKw.toLocaleString('ja-JP')} kW`]
+        ];
+        vehicleStats.replaceChildren(...specs.map(([label, value]) => {
+          const cell = document.createElement('div');
+          const dt = document.createElement('dt');
+          dt.textContent = label;
+          const dd = document.createElement('dd');
+          dd.textContent = value;
+          cell.append(dt, dd);
+          return cell;
+        }));
+        vehicleDescription.textContent = vehicle.description;
+        updateVehicleRouteOptions();
+      }
+
+      function updateVehicleRouteOptions() {
+        const previous = vehicleRouteSelect.value;
+        const options = trackSections.filter(section => isOnCurrentLevel(section) && section.source.type === 'station')
+          .map(section => {
+            const origin = positions.find(item => item.id === section.source.stationId);
+            const destination = positions.find(item => item.id === section.targetStation?.stationId);
+            const option = document.createElement('option');
+            option.value = String(section.id);
+            option.textContent = `複線${section.id}：${origin?.name || '駅'} → ${destination?.name || '線路終端'}`;
+            return option;
+          });
+        vehicleRouteSelect.replaceChildren(...options);
+        if (options.some(option => option.value === previous)) vehicleRouteSelect.value = previous;
+        vehicleRunButton.disabled = !options.length || !!(vehicleRun && !vehicleRun.finished);
+        if (!options.length && !vehicleRun) vehicleStatus.textContent = '先に駅を配置し、そこから複線を敷設してください。';
+        if (options.length && !vehicleRun) vehicleStatus.textContent = '車両と複線を選び、試運転を開始できます。';
+      }
+
+      // 車両が駅の線路端から出発できるよう、駅構内の実長と接続済み複線を一つの弧長経路にする。
+      function vehicleRouteGeometry(section, geometry) {
+        if (!geometry || section.source.type !== 'station') return null;
+        const station = positions.find(item => item.id === section.source.stationId && isOnCurrentLevel(item));
+        const origin = resolveTrackOrigin(section.source, currentTrackGeometry());
+        if (!station || !origin) return null;
+        const approachMeters = station.carCount * CAR_LENGTH_METERS + 40;
+        const radians = origin.heading * Math.PI / 180;
+        const points = [];
+        for (let d = 0; d <= approachMeters; d += TRACK_SAMPLE_METERS) {
+          const distance = Math.min(approachMeters, d);
+          points.push({
+            x: origin.x + Math.cos(radians) * (distance - approachMeters) * origin.scale,
+            y: origin.y + Math.sin(radians) * (distance - approachMeters) * origin.scale,
+            heading: origin.heading, spacing: origin.spacing, distance
+          });
+        }
+        if (points.at(-1).distance !== approachMeters) points.push({
+          x: origin.x, y: origin.y, heading: origin.heading, spacing: origin.spacing, distance: approachMeters
+        });
+        for (const point of geometry.points.slice(1)) points.push({
+          x: point.x, y: point.y, heading: point.heading,
+          spacing: trackSpacingAt(geometry, point.distance), distance: approachMeters + point.distance
+        });
+        const destination = positions.find(item => item.id === section.targetStation?.stationId && isOnCurrentLevel(item));
+        if (destination) {
+          const last = points.at(-1);
+          const length = destination.carCount * CAR_LENGTH_METERS + 40;
+          const theta = last.heading * Math.PI / 180;
+          for (let step = TRACK_SAMPLE_METERS; step <= length; step += TRACK_SAMPLE_METERS) {
+            const travel = Math.min(length, step);
+            points.push({
+              x: last.x + Math.cos(theta) * travel * geometry.scale,
+              y: last.y + Math.sin(theta) * travel * geometry.scale,
+              heading: last.heading, spacing: geometry.endSpacing, distance: last.distance + travel
+            });
+          }
+          if (points.at(-1).distance < last.distance + length) points.push({
+            x: last.x + Math.cos(theta) * length * geometry.scale,
+            y: last.y + Math.sin(theta) * length * geometry.scale,
+            heading: last.heading, spacing: geometry.endSpacing, distance: last.distance + length
+          });
+        }
+        return { points, totalMeters: points.at(-1).distance, sourceStation: station, targetStation: destination,
+          scale: origin.scale };
+      }
+
+      function vehiclePointAt(route, distance) {
+        const points = route.points;
+        const limited = Math.max(0, Math.min(route.totalMeters, distance));
+        let low = 0;
+        let high = points.length - 1;
+        while (high - low > 1) {
+          const mid = Math.floor((low + high) / 2);
+          if (points[mid].distance < limited) low = mid;
+          else high = mid;
+        }
+        const a = points[low];
+        const b = points[high];
+        const t = (limited - a.distance) / (b.distance - a.distance || 1);
+        const heading = normalDegrees(a.heading + angleDifference(b.heading, a.heading) * t);
+        const theta = heading * Math.PI / 180;
+        const spacing = a.spacing + (b.spacing - a.spacing) * t;
+        return { x: a.x + (b.x - a.x) * t + Math.sin(theta) * spacing / 2,
+          y: a.y + (b.y - a.y) * t - Math.cos(theta) * spacing / 2, heading };
+      }
+
+      function renderVehicleTrain() {
+        if (!vehicleRun || !isOnCurrentLevel(vehicleRun.section)) {
+          trainLayer.replaceChildren();
+          return;
+        }
+        const { vehicle, route, frontMeters } = vehicleRun;
+        const cars = [];
+        for (let index = vehicle.cars - 1; index >= 0; index--) {
+          const centerDistance = frontMeters - (index + .5) * CAR_LENGTH_METERS;
+          const center = vehiclePointAt(route, centerDistance);
+          const car = document.createElementNS(SVG_NS, 'g');
+          car.setAttribute('class', 'rolling-stock-car');
+          car.setAttribute('data-car-number', String(index + 1));
+          car.setAttribute('transform', `translate(${center.x} ${center.y}) rotate(${center.heading})`);
+          const width = CAR_LENGTH_METERS * route.scale - 1 * route.scale;
+          const height = (mapMode === 'blank' ? 16 : 2.8 * route.scale);
+          const body = document.createElementNS(SVG_NS, 'rect');
+          body.setAttribute('class', 'train-car');
+          body.setAttribute('x', String(-width / 2));
+          body.setAttribute('y', String(-height / 2));
+          body.setAttribute('width', String(width));
+          body.setAttribute('height', String(height));
+          body.setAttribute('rx', String(Math.min(height / 4, 2.5 * route.scale)));
+          body.setAttribute('stroke-width', String(mapMode === 'blank' ? 1.4 : .35 * route.scale));
+          body.setAttribute('fill', vehicle.id === 'keio5000' ? '#e0e8f0' : '#f7f7f8');
+          const band = document.createElementNS(SVG_NS, 'rect');
+          band.setAttribute('x', String(-width / 2));
+          band.setAttribute('y', String(height * .07));
+          band.setAttribute('width', String(width));
+          band.setAttribute('height', String(Math.max(.45 * route.scale, height * .2)));
+          band.setAttribute('fill', vehicle.id === 'keio5000' ? '#d94f7b' : '#c83b47');
+          const glass = document.createElementNS(SVG_NS, 'rect');
+          glass.setAttribute('class', 'train-window');
+          glass.setAttribute('x', String(-width * .38));
+          glass.setAttribute('y', String(-height * .34));
+          glass.setAttribute('width', String(width * .76));
+          glass.setAttribute('height', String(height * .24));
+          car.append(body, band, glass);
+          cars.push(car);
+        }
+        trainLayer.replaceChildren(...cars);
+      }
+
+      function currentAcceleration(vehicle, speedMps) {
+        const reference = vehicle.accelerationReferenceKmh;
+        const kmh = speedMps * 3.6;
+        return vehicle.accelerationKmhps / 3.6 * Math.min(1, reference / Math.max(kmh, reference));
+      }
+
+      // 終点までの制動距離 v²/2a を毎ステップ確認。公開諸元の常用・非常減速度を直接使用する。
+      function advanceVehicle(vehicle, state, deltaSeconds, finishMeters) {
+        let remainingTime = Math.max(0, Math.min(2, deltaSeconds));
+        while (remainingTime > 1e-9 && !state.finished) {
+          const dt = Math.min(.05, remainingTime);
+          remainingTime -= dt;
+          const remaining = finishMeters - state.frontMeters;
+          const brake = (state.emergency ? vehicle.emergencyDecelerationKmhps : vehicle.serviceDecelerationKmhps) / 3.6;
+          const stoppingMeters = state.speedMps ** 2 / (2 * brake);
+          const decelerate = state.emergency || remaining <= stoppingMeters + .5;
+          const acceleration = decelerate ? -brake : currentAcceleration(vehicle, state.speedMps);
+          const nextSpeed = Math.max(0, Math.min(vehicle.maxServiceKmh / 3.6, state.speedMps + acceleration * dt));
+          const travel = Math.max(0, (state.speedMps + nextSpeed) / 2 * dt);
+          state.frontMeters = Math.min(finishMeters, state.frontMeters + travel);
+          state.speedMps = nextSpeed;
+          state.elapsedSeconds += dt;
+          state.maxObservedKmh = Math.max(state.maxObservedKmh, nextSpeed * 3.6);
+          if (state.frontMeters >= finishMeters - .05 || (state.speedMps < .05 && decelerate)) {
+            state.finished = true;
+            state.speedMps = 0;
+          }
+        }
+        return state;
+      }
+
+      function updateVehicleStatus() {
+        if (!vehicleRun) return;
+        const { vehicle, route, frontMeters, speedMps, elapsedSeconds, finished, emergency } = vehicleRun;
+        const kmh = (speedMps * 3.6).toFixed(1);
+        const remaining = Math.max(0, route.totalMeters - (route.targetStation ? 20 : 0) - frontMeters);
+        const text = `${vehicle.name}｜${kmh}km/h｜走行${Math.max(0, Math.round(frontMeters - (vehicle.cars * CAR_LENGTH_METERS + 20))).toLocaleString('ja-JP')}m｜残り${Math.round(remaining)}m｜${elapsedSeconds.toFixed(1)}秒${finished ? '・停止' : emergency ? '・非常制動中' : ''}`;
+        vehicleStatus.textContent = text;
+        trainHud.textContent = `${vehicle.name}　${kmh}km/h`;
+        trainHud.hidden = false;
+        vehicleRunButton.disabled = !finished;
+        vehicleStopButton.disabled = false;
+        vehicleEmergencyButton.disabled = finished || emergency;
+      }
+
+      function stopVehicleRun(clearStatus = true) {
+        if (vehicleFrameId !== null) cancelAnimationFrame(vehicleFrameId);
+        vehicleFrameId = null;
+        vehicleRun = null;
+        trainLayer.replaceChildren();
+        trainHud.hidden = true;
+        vehicleStopButton.disabled = true;
+        vehicleEmergencyButton.disabled = true;
+        if (clearStatus) vehicleStatus.textContent = '試運転を終了しました。';
+        updateVehicleRouteOptions();
+      }
+
+      function animateVehicle(timestamp) {
+        vehicleFrameId = null;
+        if (!vehicleRun || vehicleRun.finished) return;
+        if (vehicleRun.previousFrame !== null) {
+          const elapsed = Math.min(.25, (timestamp - vehicleRun.previousFrame) / 1000);
+          const multiplier = Number(vehicleSpeedSelect.value) || 1;
+          advanceVehicle(vehicleRun.vehicle, vehicleRun, elapsed * multiplier,
+            vehicleRun.route.totalMeters - (vehicleRun.route.targetStation ? 20 : 0));
+        }
+        vehicleRun.previousFrame = timestamp;
+        renderVehicleTrain();
+        updateVehicleStatus();
+        if (!vehicleRun.finished) vehicleFrameId = requestAnimationFrame(animateVehicle);
+      }
+
+      function startVehicleRun() {
+        const vehicle = selectedVehicle();
+        const section = trackSections.find(item => item.id === Number(vehicleRouteSelect.value) && isOnCurrentLevel(item));
+        if (!section) { vehicleStatus.textContent = 'この階層には試運転可能な複線がありません。'; return; }
+        const geometry = currentTrackGeometry().get(section.id);
+        const route = vehicleRouteGeometry(section, geometry);
+        if (!route) { vehicleStatus.textContent = '線路経路を計算できません。'; return; }
+        if (route.sourceStation.carCount < vehicle.cars || (route.targetStation && route.targetStation.carCount < vehicle.cars)) {
+          vehicleStatus.textContent = `${vehicle.cars}両編成には${vehicle.cars * CAR_LENGTH_METERS}m以上のホームが必要です。出発駅・到着駅のホーム長を確認してください。`;
+          return;
+        }
+        stopVehicleRun(false);
+        vehicleRun = { vehicle, section, route, frontMeters: vehicle.cars * CAR_LENGTH_METERS + 20,
+          speedMps: 0, elapsedSeconds: 0, maxObservedKmh: 0, emergency: false,
+          finished: false, previousFrame: null };
+        renderVehicleTrain();
+        updateVehicleStatus();
+        vehicleFrameId = requestAnimationFrame(animateVehicle);
+        hint.textContent = `${vehicle.name}の試運転を開始しました（線路の軌間は未設定・性能比較モード）`;
+      }
+
       function renderMapTiles() {
         if (mapMode !== 'kariya') return;
         const factor = canvasSize.width / view.width * mapScale();
@@ -1758,11 +2131,13 @@
           );
         }));
         renderStationEndpoints();
+        renderVehicleTrain();
         renderCatchmentRings();
         renderDemandInfo();
       }
 
       function fitCanvas() {
+        if (vehicleRun) stopVehicleRun(false);
         const bounds = svg.getBoundingClientRect();
         if (!bounds.width || !bounds.height) return;
         // スマートフォン縦画面でも、ホームを画面幅いっぱいに近い大きさで表示する。
@@ -1799,6 +2174,8 @@
       }
 
       button.addEventListener('click', () => {
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
         placing = !placing;
         layingTrack = false;
         trackDestination = null;
@@ -1817,6 +2194,8 @@
       });
 
       trackButton.addEventListener('click', () => {
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
         layingTrack = !layingTrack;
         placing = false;
         trackDestination = null;
@@ -1842,6 +2221,41 @@
         connectionDialog.hidden = true;
         renderTrackPreview();
       });
+      fleetButton.addEventListener('click', () => {
+        const opening = fleetPanel.hidden;
+        fleetPanel.hidden = !opening;
+        fleetButton.setAttribute('aria-expanded', String(opening));
+        if (!opening) return;
+        placing = false;
+        layingTrack = false;
+        trackEditor.hidden = true;
+        trackPreview.replaceChildren();
+        trackDestination = null;
+        trackTargetStation = null;
+        connectionDialog.hidden = true;
+        button.setAttribute('aria-pressed', 'false');
+        trackButton.setAttribute('aria-pressed', 'false');
+        svg.classList.toggle('placing', false);
+        svg.classList.toggle('laying-track', false);
+        preview.setAttribute('visibility', 'hidden');
+        selectStation(null);
+        renderVehicleCatalog();
+      });
+      fleetCloseButton.addEventListener('click', () => {
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
+      });
+      vehicleModelSelect.addEventListener('change', () => {
+        if (vehicleRun) stopVehicleRun(false);
+        renderVehicleCatalog();
+      });
+      vehicleRunButton.addEventListener('click', startVehicleRun);
+      vehicleStopButton.addEventListener('click', () => stopVehicleRun());
+      vehicleEmergencyButton.addEventListener('click', () => {
+        if (!vehicleRun || vehicleRun.finished) return;
+        vehicleRun.emergency = true;
+        updateVehicleStatus();
+      });
       function buildTrack() {
         const selected = availableTrackOrigins.find(origin => origin.key === trackOriginSelect.value);
         if (!selected) {
@@ -1864,6 +2278,7 @@
         trackTargetStation = null;
         trackDestination = null;
         syncTrackOrigins(stationConnection ? '' : `section:${id}`);
+        updateVehicleRouteOptions();
         redrawPlaced();
         updateStationEditor();
         hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを${stationConnection ? '駅の線路端まで接続し、両駅側にX字渡り線を設置しました' : selected.source.type === 'station' ? '自動敷設し、駅端にX字渡り線を設置しました' : '自動敷設しました。次の行き先をタップして延長できます'}`;
@@ -1901,6 +2316,7 @@
       });
 
       modeSelect.addEventListener('change', () => {
+        if (vehicleRun) stopVehicleRun(false);
         mapMode = modeSelect.value;
         selectedStationId = null;
         stationDragStart = null;
@@ -1913,6 +2329,7 @@
         touches.clear();
         pendingTouchPlacement = null;
         fitCanvas();
+        updateVehicleRouteOptions();
         updateStationEditor();
         hint.textContent = `${floorLabel()}：${mapMode === 'kariya' ? '3市の地図' : '白紙のキャンバス'}にホームを配置できます`;
       });
@@ -1937,6 +2354,7 @@
       });
 
       floorSelect.addEventListener('change', () => {
+        if (vehicleRun) stopVehicleRun(false);
         currentLevel = Number(floorSelect.value);
         selectedStationId = null;
         stationDragStart = null;
@@ -1953,6 +2371,7 @@
         preview.setAttribute('visibility', 'hidden');
         redrawPlaced();
         syncTrackOrigins();
+        updateVehicleRouteOptions();
         updateStationEditor();
         hint.textContent = `${floorLabel()}を編集中。駅・線路は選択した階層だけに表示・配置されます`;
       });
@@ -2112,6 +2531,7 @@
 
       window.addEventListener('resize', fitCanvas);
       fitCanvas();
+      renderVehicleCatalog();
       loadPopulationData();
     })();
   </script>

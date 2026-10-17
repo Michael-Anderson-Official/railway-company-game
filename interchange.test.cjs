@@ -39,6 +39,8 @@ class Element {
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview', '#placed',
   '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level',
+  '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
+  '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#car-count', '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#deselect-station',
   '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand', '#track-editor', '#track-origin',
@@ -50,6 +52,9 @@ nodes['#map-mode'].value = 'kariya';
 nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
+nodes['#vehicle-model'].value = 'meitetsu2200';
+nodes['#vehicle-speed'].value = '5';
+nodes['#fleet-panel'].hidden = true;
 nodes['#interchange-dialog'].hidden = true;
 nodes['#station-interchange'].hidden = true;
 const board = nodes['#board'];

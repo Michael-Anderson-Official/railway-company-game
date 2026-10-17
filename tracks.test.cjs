@@ -44,6 +44,8 @@ class Element {
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
   '#placed', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
+  '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
+  '#fleet-preview', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
@@ -53,18 +55,37 @@ const ids = [
 ];
 const nodes = Object.fromEntries(ids.map(id => [id, new Element()]));
 nodes['#track-origin'].tagName = 'select';
+nodes['#vehicle-route'].tagName = 'select';
 nodes['#map-mode'].value = 'kariya';
 nodes['#map-focus'].value = 'kariya';
 nodes['#floor-level'].value = '-1';
 nodes['#car-count'].value = '10';
+nodes['#vehicle-model'].value = 'meitetsu2200';
+nodes['#vehicle-speed'].value = '5';
+nodes['#fleet-panel'].hidden = true;
 const board = nodes['#board'];
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
-vm.runInNewContext(script, {
+const windowMock = new Element();
+const frameCallbacks = new Map();
+let frameSequence = 1;
+const scriptWithHooks = script.replace('      loadPopulationData();',
+  '      window.vehicleTestHooks = { ROLLING_STOCK, currentAcceleration, advanceVehicle };\n      loadPopulationData();');
+vm.runInNewContext(scriptWithHooks, {
   document: { querySelector: key => nodes[key], createElement: name => new Element(name), createElementNS: () => new Element() },
-  window: new Element(), Math, Map,
+  window: windowMock, Math, Map,
+  requestAnimationFrame: callback => { const id = frameSequence++; frameCallbacks.set(id, callback); return id; },
+  cancelAnimationFrame: id => frameCallbacks.delete(id),
   fetch: async () => ({ ok: true, json: async () => ({ populationYear: 2025, cells: [] }) })
 });
+
+function advanceFrames(count, millisecondsPerFrame = 50) {
+  for (let index = 0; index < count && frameCallbacks.size; index++) {
+    const [id, callback] = frameCallbacks.entries().next().value;
+    frameCallbacks.delete(id);
+    callback(index * millisecondsPerFrame);
+  }
+}
 
 function pointer(type, name, id, x, y) {
   board.dispatch(name, { pointerType: type, pointerId: id, clientX: x, clientY: y,
@@ -399,4 +420,79 @@ assert.ok(Math.abs(mid(1).x - beginning.x) < .05, 'the route leaves the origin o
 assert.ok(Math.abs(mid(railA.length - 2).x - ending.x) < .05, 'the route enters the destination on its vertical tangent');
 assert.ok(Math.abs(endpointGap(routes()[0], true) - 12 * expectedMetersToSvg) < .005);
 
-console.log('Automatic double tracks, station-end X crossovers, station connections, safety, mobile gestures and six-floor isolation OK');
+// Real vehicle specifications drive the actual simulation, rather than just display labels.
+const { ROLLING_STOCK, currentAcceleration, advanceVehicle } = windowMock.vehicleTestHooks;
+assert.equal(ROLLING_STOCK.meitetsu2200.cars, 6);
+assert.equal(ROLLING_STOCK.meitetsu2200.maxServiceKmh, 120);
+assert.equal(ROLLING_STOCK.meitetsu2200.accelerationKmhps, 2.3);
+assert.equal(ROLLING_STOCK.meitetsu2200.serviceDecelerationKmhps, 3.5);
+assert.equal(ROLLING_STOCK.meitetsu2200.gaugeMm, 1067);
+assert.equal(ROLLING_STOCK.keio5000.cars, 10);
+assert.equal(ROLLING_STOCK.keio5000.maxServiceKmh, 110);
+assert.equal(ROLLING_STOCK.keio5000.accelerationKmhps, 3.3);
+assert.equal(ROLLING_STOCK.keio5000.serviceDecelerationKmhps, 4.0);
+assert.equal(ROLLING_STOCK.keio5000.gaugeMm, 1372);
+for (const vehicle of Object.values(ROLLING_STOCK)) {
+  assert.equal(vehicle.cars * vehicle.carLengthMeters, vehicle.cars * 20);
+  assert.equal(currentAcceleration(vehicle, 0) * 3.6, vehicle.accelerationKmhps);
+  assert.ok(currentAcceleration(vehicle, 100 / 3.6) < currentAcceleration(vehicle, 0),
+    'high speed traction tapers below the published starting acceleration');
+  const state = { speedMps: 0, frontMeters: 220, elapsedSeconds: 0,
+    maxObservedKmh: 0, emergency: false, finished: false };
+  for (let i = 0; i < 4000 && !state.finished; i++) advanceVehicle(vehicle, state, .1, 2000);
+  assert.ok(state.finished, `${vehicle.name} reaches its simulated destination`);
+  assert.equal(state.speedMps, 0, 'service braking stops the vehicle');
+  assert.ok(state.frontMeters <= 2000, 'no stop point overrun');
+  assert.ok(state.maxObservedKmh <= vehicle.maxServiceKmh + 1e-8, 'actual running speed respects service maximum');
+}
+nodes['#fleet-tool'].dispatch('click');
+assert.equal(nodes['#fleet-panel'].hidden, false, 'rolling stock catalog opens');
+assert.equal(nodes['#vehicle-route'].children.length, 1, 'station-connected route is selectable');
+assert.equal(nodes['#fleet-preview'].children.length, 6, 'Meitetsu six-car preview');
+nodes['#vehicle-run'].dispatch('click');
+assert.equal(nodes['#train-layer'].children.length, 6, 'six real-length cars appear on constructed track');
+assert.equal(nodes['#train-layer'].children[0].attributes.class, 'rolling-stock-car');
+advanceFrames(40);
+assert.match(nodes['#vehicle-status'].textContent, /名鉄2200系/);
+assert.equal(nodes['#vehicle-run'].disabled, true, 'only one train trial runs at once');
+nodes['#vehicle-emergency'].dispatch('click');
+assert.match(nodes['#vehicle-status'].textContent, /非常制動中/);
+advanceFrames(80);
+assert.equal(nodes['#vehicle-run'].disabled, false, 'emergency stop returns controls');
+nodes['#vehicle-stop'].dispatch('click');
+assert.equal(nodes['#train-layer'].children.length, 0, 'reset clears the train without removing rails');
+nodes['#vehicle-model'].value = 'keio5000';
+nodes['#vehicle-model'].dispatch('change');
+assert.equal(nodes['#fleet-preview'].children.length, 10, 'Keio ten-car preview');
+nodes['#vehicle-run'].dispatch('click');
+assert.equal(nodes['#train-layer'].children.length, 10, 'ten actual vehicle bodies are drawn');
+advanceFrames(1200);
+assert.equal(nodes['#vehicle-run'].disabled, false, `Keio train completes automatic service stop: ${nodes['#vehicle-status'].textContent}`);
+assert.match(nodes['#vehicle-status'].textContent, /停止/);
+nodes['#vehicle-stop'].dispatch('click');
+assert.equal(routes().length, 1, 'test drive never destroys track sections');
+
+// A 200m ten-car unit cannot depart from the 120m platform built for six cars.
+nodes['#floor-level'].value = '-5';
+nodes['#floor-level'].dispatch('change');
+nodes['#car-count'].value = '6';
+nodes['#car-count'].dispatch('change');
+nodes['#place-tool'].dispatch('click');
+mouseTap(200, 420);
+nodes['#track-tool'].dispatch('click');
+mouseTap(200, 100);
+assert.equal(nodes['#build-track'].disabled, false, 'six-car station can originate a double track');
+commit();
+nodes['#fleet-tool'].dispatch('click');
+nodes['#vehicle-model'].value = 'keio5000';
+nodes['#vehicle-model'].dispatch('change');
+nodes['#vehicle-run'].dispatch('click');
+assert.match(nodes['#vehicle-status'].textContent, /200m以上のホームが必要/);
+assert.equal(nodes['#train-layer'].children.length, 0, 'overlong train is refused before rendering');
+nodes['#vehicle-model'].value = 'meitetsu2200';
+nodes['#vehicle-model'].dispatch('change');
+nodes['#vehicle-run'].dispatch('click');
+assert.equal(nodes['#train-layer'].children.length, 6, 'six-car train fits the 120m platform');
+nodes['#vehicle-stop'].dispatch('click');
+
+console.log('Track construction, X crossovers, six floors, rolling-stock specifications, 20m/car and measured train trial runs OK');
