@@ -44,6 +44,7 @@ nodes['#vehicle-speed'].value = '5';
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const hooked = script.replace('      loadPopulationData();', `
         window.autoTrackTest = { positions, depots, routes, trackSections, redrawPlaced, buildDepotJourney,
+          closestDepotJunction, currentTrackGeometry, resolveTrackOrigin, railPointAtDistance, validateTrack,
           warnings: () => automaticTrackWarnings,
           dirty: () => { automaticTracksDirty = true; },
           chooseDepot: id => selectDepot(id) };
@@ -77,8 +78,8 @@ assert.equal(nodes['#tracks'].children.length, 2, 'both rail pairs render on the
 assert.ok(automatic().every(section => section.crossoverEnds.length === 2), 'station-to-station links have X crossovers at both ends');
 const stableTrackId = automatic()[0].id;
 
-const depot = { id: 4, mode: 'kariya', level: -1, rotation: 270, carCount: 10,
-  lat: 34.993, lon: 137.012, routeId: null, vehicleId: 'meitetsu2200', unitId: 1 };
+const depot = { id: 4, mode: 'kariya', level: -1, rotation: 180, carCount: 10,
+  lat: 35.009, lon: 137.019, routeId: null, vehicleId: 'meitetsu2200', unitId: 1 };
 state.depots.push(depot);
 state.chooseDepot(depot.id);
 assert.equal(nodes['#depot-route'].value, '', 'new depots start without a route');
@@ -86,16 +87,51 @@ nodes['#depot-route'].value = '1';
 nodes['#depot-route'].dispatch('change');
 assert.equal(depot.routeId, 1, 'depot route selection persists in the depot');
 assert.equal(automatic().length, 3, `depot automatically attaches to the numbered line: ${state.warnings().join('; ')}`);
-const spur = automatic().find(section => section.source.type === 'depot' || section.targetStation.type === 'depot');
-assert.ok(spur, 'a single track-to-depot junction is generated');
+const spur = automatic().find(section => section.source.type === 'depot');
+assert.ok(spur, 'a depot spur is generated');
+assert.equal(spur.targetStation.type, 'junction', 'depot joins an interior point of existing double track, not an unused station end');
+assert.ok(automatic().some(section => section.id === spur.targetStation.sectionId && section.autoKey.startsWith('route:')),
+  'depot junction is anchored to the selected mainline');
+assert.ok(spur.targetStation.distanceMeters < 1000, 'junction joins a nearby segment rather than extending to its far endpoint');
+assert.ok(spur.targetStation.distanceMeters >= 180, 'junction is clear of the first station crossover');
+const hostGeometry = state.currentTrackGeometry().get(spur.targetStation.sectionId);
+assert.ok(hostGeometry.points.at(-1).distance - spur.targetStation.distanceMeters >= 180,
+  'junction is clear of the second station crossover');
+assert.ok(nodes['#tracks'].children.some(group => group.children.some(child =>
+  child.attributes['data-crossover-end'] === 'junction')), 'mainline junction displays its crossovers');
 assert.equal(spur.routeId, route.id);
 assert.equal(automatic()[0].id, stableTrackId, 'unchanged automatic segments keep their identities');
-assert.equal(state.buildDepotJourney(depot).error, undefined, 'trains can leave the depot via the generated connection');
+nodes['#depot-direction'].value = 'down';
+nodes['#depot-direction'].dispatch('change');
+const downJourney = state.buildDepotJourney(depot);
+assert.equal(downJourney.error, undefined, `trains can leave toward high-numbered stations: ${downJourney.error}`);
+assert.equal(downJourney.outwardStops.at(-1).stationId, south.id, 'down trains reach the last numbered station');
+nodes['#depot-direction'].value = 'up';
+nodes['#depot-direction'].dispatch('change');
+assert.equal(depot.direction, 'up', 'depot direction selector persists upbound departure');
+const upJourney = state.buildDepotJourney(depot);
+assert.equal(upJourney.error, undefined, `trains can leave toward low-numbered stations: ${upJourney.error}`);
+assert.equal(upJourney.outwardStops.at(-1).stationId, north.id, 'up trains reach the first numbered station');
+assert.ok(Math.hypot(downJourney.route.points.at(-1).x - upJourney.route.points.at(-1).x,
+  downJourney.route.points.at(-1).y - upJourney.route.points.at(-1).y) / upJourney.route.scale > 500,
+  'up/down trains reach physically different line terminals');
+nodes['#depot-direction'].value = 'down';
+nodes['#depot-direction'].dispatch('change');
 
 nodes['#depot-route'].value = '';
 nodes['#depot-route'].dispatch('change');
 assert.equal(automatic().length, 2, 'clearing depot route removes only the depot spur');
 assert.equal(state.trackSections.filter(section => section.source.type === 'depot').length, 0);
+state.routes.push({ id: 2, name: '未敷設線', code: 'NS', color: '#228866' });
+depot.routeId = 2;
+state.dirty();
+state.redrawPlaced();
+assert.equal(automatic().length, 2, 'selecting an unbuilt route never connects to a different line');
+assert.ok(state.warnings().some(warning => warning.includes('複線へ接続できません')),
+  'impossible depot connection reports an explicit reason');
+depot.routeId = null;
+state.dirty();
+state.redrawPlaced();
 
 middle.rotation = 0;
 state.dirty();

@@ -41,7 +41,7 @@ class Element {
 
 const nodes = Object.fromEntries([
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#waypoint-layer', '#track-preview', '#placed', '#depots', '#station-endpoints', '#preview',
-  '#depot-tool', '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance', '#depot-route', '#depot-service', '#depot-dispatch', '#depot-return', '#depot-speed',
+  '#depot-tool', '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance', '#depot-route', '#depot-service', '#depot-direction', '#depot-dispatch', '#depot-return', '#depot-speed',
   '#place-tool', '#track-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count', '#hint', '#map-data', '#map-credit',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
   '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#auto-route-warnings', '#route-list', '#waypoint-section', '#waypoint-pick', '#waypoint-undo', '#waypoint-clear', '#waypoint-status', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',

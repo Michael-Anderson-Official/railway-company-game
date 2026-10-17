@@ -679,7 +679,7 @@
           <button id="depot-close" type="button" aria-label="車両基地を閉じる">×</button>
         </div>
         <p id="depot-info" class="depot-info">留置線1線・選択した両数の編成に対応</p>
-        <p class="depot-guidance" id="depot-guidance">車両基地をドラッグで移動・紫の↻で自由回転。路線を選ぶと接続可能な駅端へ自動接続します。</p>
+        <p class="depot-guidance" id="depot-guidance">車両基地をドラッグで移動・紫の↻で自由回転。路線を選ぶと最寄りの敷設可能な複線へ自動接続します。</p>
         <div class="editor-rotation">
           <label for="depot-angle">角度</label>
           <input id="depot-angle" type="range" min="0" max="359.9" step="0.1" value="90" aria-label="車両基地の回転角度">
@@ -698,6 +698,9 @@
         <label class="depot-field" for="depot-service" style="margin-top:10px">購入済み編成の運行種別
           <select id="depot-service"><option value="">回送（種別なし）</option></select>
         </label>
+        <label class="depot-field" for="depot-direction" style="margin-top:10px">出庫する方向
+          <select id="depot-direction"><option value="down">下り（駅番号が大きい方向）</option><option value="up">上り（駅番号が小さい方向）</option></select>
+        </label>
         <div class="depot-actions">
           <button id="depot-dispatch" type="button">出庫・発車</button>
           <button id="depot-return" type="button" disabled>入庫開始</button>
@@ -707,7 +710,7 @@
         </label>
         <p id="depot-status" class="depot-status" role="status" aria-live="polite"></p>
         <p id="depot-owned" class="fleet-notes"></p>
-        <p class="fleet-notes">※留置有効長＝設定両数×20m。1線に1編成まで。接続路線を選ぶと同じ階層の空き駅端へ自動敷設。駅で折り返したら「入庫開始」で帰庫できます。価格・所持金と自動時刻表は未設定です。</p>
+        <p class="fleet-notes">※留置有効長＝設定両数×20m。1線に1編成まで。接続路線を選ぶと同じ階層の最寄りの敷設可能な複線へ分岐接続。上り・下りを選んで発車でき、折返し後は入庫できます。価格・所持金と自動時刻表は未設定です。</p>
       </aside>
       <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
@@ -764,6 +767,7 @@
       const depotGuidance = document.querySelector('#depot-guidance');
       const depotRouteSelect = document.querySelector('#depot-route');
       const depotServiceSelect = document.querySelector('#depot-service');
+      const depotDirectionSelect = document.querySelector('#depot-direction');
       const depotDispatchButton = document.querySelector('#depot-dispatch');
       const depotReturnButton = document.querySelector('#depot-return');
       const depotSpeedSelect = document.querySelector('#depot-speed');
@@ -1566,9 +1570,54 @@
           (section.targetStation?.type === 'depot' && section.targetStation.depotId === id));
       }
 
-      // 路線番号の順番で「隣駅同士」だけを接続する。駅端は一度だけ使用し、
-      // 車両基地も選択路線の未使用駅端を探して接続する（頭端式の出入口は一か所）。
-      // 既存の曲線半径・構内侵入・線路交差チェックを通らない区間は作らない。
+      // 車両基地の出入口から、選択路線の最寄りの敷設可能な本線途中へ分岐する。
+      // 路線が未敷設なら接続しない。既存の駅端・本線の幾何形状を変更しない。
+      function closestDepotJunction(depot, route, via, previous) {
+        const mouth = { type: 'depot', depotId: depot.id };
+        const geometries = currentTrackGeometry();
+        const origin = resolveTrackOrigin(mouth, geometries);
+        if (!origin) return { error: '車両基地の出入口が見つかりません' };
+        const candidates = [];
+        const sections = trackSections.filter(section => section.automatic && section.routeId === route.id &&
+          section.autoKey?.startsWith(`route:${route.id}:`) && isOnCurrentLevel(section));
+        for (const section of sections) {
+          const shape = geometries.get(section.id);
+          if (!shape) continue;
+          const total = shape.points.at(-1).distance;
+          // 駅の渡り線と接続区間からそれぞれ180m以上離す。
+          if (total < 400) continue;
+          for (let meters = 180; meters <= total - 180; meters += 60) {
+            const at = railPointAtDistance(shape, meters);
+            candidates.push({ section, distanceMeters: meters,
+              gap: Math.hypot(at.x - origin.x, at.y - origin.y) / origin.scale });
+          }
+        }
+        candidates.sort((a, b) => a.gap - b.gap);
+        if (!candidates.length) return { error: 'この路線に接続できる駅間の複線がありません' };
+        // 地点の再指定中は元の接続点を維持し、線路が不可能なら前の形に戻す。
+        const targets = via && previous?.targetStation?.type === 'junction'
+          ? [{ section: trackSections.find(section => section.id === previous.targetStation.sectionId),
+            distanceMeters: previous.targetStation.distanceMeters, reverse: previous.targetStation.reverse }]
+          : candidates;
+        let failure = '';
+        for (const choice of targets.slice(0, 90)) {
+          if (!choice.section || !geometries.has(choice.section.id)) continue;
+          if (trackSections.some(section => section.targetStation?.type === 'junction' &&
+              section.targetStation.sectionId === choice.section.id &&
+              Math.abs(section.targetStation.distanceMeters - choice.distanceMeters) < 150)) continue;
+          for (const reverse of choice.reverse === undefined ? [false, true] : [choice.reverse]) {
+            const destination = { type: 'junction', depotId: depot.id,
+              sectionId: choice.section.id, distanceMeters: choice.distanceMeters, reverse };
+            const result = validateTrack(mouth, null, geometries, destination, via);
+            if (result.error) { failure = result.error; continue; }
+            return { source: mouth, destination, lengthMeters: result.lengthMeters, via };
+          }
+        }
+        return { error: failure || '出入口の向き・曲線半径・既存の設備との距離が接続条件を満たしません' };
+      }
+
+      // 駅番号順の隣駅を接続し、その後に車両基地を本線途中へ分岐接続する。
+      // 最小曲線半径・構内侵入・既存線路交差チェックを満たすときだけ敷設する。
       function rebuildAutomaticTracks() {
         if (!automaticTracksDirty) return;
         automaticTracksDirty = false;
@@ -1640,22 +1689,14 @@
         for (const depot of depots.filter(isOnCurrentLevel)) {
           const route = routeById(depot.routeId);
           if (!route) continue;
-          const choices = [];
-          const via = activeTrackWaypoint(`depot:${depot.id}`);
-          const linkedStations = serviceStations(route.id).filter(isOnCurrentLevel);
-          for (const station of linkedStations) {
-            for (const side of [-1, 1]) {
-              const endpoint = { type: 'station', stationId: station.id, side };
-              const mouth = { type: 'depot', depotId: depot.id };
-              const outward = tryJoin(mouth, endpoint, via, `depot:${depot.id}`);
-              const inward = tryJoin(endpoint, mouth, via, `depot:${depot.id}`);
-              if (outward) choices.push({ ...outward, station });
-              if (inward) choices.push({ ...inward, station });
-            }
+          const key = `depot:${depot.id}`;
+          const via = activeTrackWaypoint(key);
+          const chosen = closestDepotJunction(depot, route, via, previousConnections.get(key));
+          if (!chosen.error) addJoin(key, route.id, chosen);
+          else {
+            if (via) waypointFailureReasons.set(key, chosen.error);
+            automaticTrackWarnings.push(`車両基地${depot.id}：${route.name}の複線へ接続できません（${chosen.error}）。位置・角度を調整してください`);
           }
-          choices.sort((a, b) => a.lengthMeters - b.lengthMeters);
-          if (choices.length) addJoin(`depot:${depot.id}`, route.id, choices[0]);
-          else automaticTrackWarnings.push(`車両基地${depot.id}：${route.name}の接続可能な空き駅端がありません。位置・角度・階層を確認してください`);
         }
         autoRouteWarnings.hidden = !automaticTrackWarnings.length;
         autoRouteWarnings.textContent = automaticTrackWarnings.slice(0, 4).join('／') +
@@ -1687,7 +1728,31 @@
           : { x: target.xRatio * canvasSize.width, y: target.yRatio * canvasSize.height };
       }
 
+      // 本線の任意の距離を補間する。接続位置は駅端でなく複線の中心線に固定する。
+      function railPointAtDistance(geometry, meters) {
+        const points = geometry.points;
+        if (!points?.length || meters < 0 || meters > points.at(-1).distance) return null;
+        let low = 0, high = points.length - 1;
+        while (high - low > 1) {
+          const mid = (low + high) >> 1;
+          if (points[mid].distance < meters) low = mid;
+          else high = mid;
+        }
+        const a = points[low], b = points[high];
+        const t = Math.max(0, Math.min(1, (meters - a.distance) / (b.distance - a.distance || 1)));
+        return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+          heading: normalDegrees(a.heading + angleDifference(b.heading, a.heading) * t), distance: meters };
+      }
+
       function resolveTrackOrigin(source, geometries) {
+        if (source.type === 'junction') {
+          const host = geometries.get(source.sectionId);
+          const at = host && railPointAtDistance(host, source.distanceMeters);
+          if (!at) return null;
+          return { ...at, heading: normalDegrees(at.heading + (source.reverse ? 0 : 180)),
+            scale: host.scale, spacing: trackSpacingAt(host, source.distanceMeters),
+            stationId: null, stationSource: false };
+        }
         if (source.type === 'section') {
           const parent = geometries.get(source.sectionId);
           if (!parent) return null;
@@ -1965,16 +2030,17 @@
           y: y + side * Math.cos(heading) * halfGap };
       }
 
-      function createScissorsCrossover(geometry, atDestination, zoom) {
+      function createScissorsCrossover(geometry, atDestination, zoom, junctionMeters = null) {
         const totalLength = geometry.points[geometry.points.length - 1].distance;
-        const begin = atDestination
+        const begin = junctionMeters !== null ? junctionMeters - CROSSOVER_LENGTH_METERS / 2 : atDestination
           ? totalLength - CROSSOVER_START_METERS - CROSSOVER_LENGTH_METERS
           : CROSSOVER_START_METERS;
         if (begin < 0 || begin + CROSSOVER_LENGTH_METERS > totalLength) return null;
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('class', 'scissors-crossover');
-        group.setAttribute('data-crossover-end', atDestination ? 'destination' : 'source');
-        group.setAttribute('aria-label', `X字渡り線（${atDestination ? '接続先' : '接続元'}駅側）`);
+        group.setAttribute('data-crossover-end', junctionMeters !== null ? 'junction' : atDestination ? 'destination' : 'source');
+        group.setAttribute('aria-label', junctionMeters !== null ? '車両基地分岐・上下線連絡用X字渡り線'
+          : `X字渡り線（${atDestination ? '接続先' : '接続元'}駅側）`);
         // 2本の渡り線が中央で交差し、4か所の分岐端で本線に接する。
         for (const sign of [-1, 1]) {
           const rail = document.createElementNS(SVG_NS, 'path');
@@ -1993,7 +2059,7 @@
         return group;
       }
 
-      function createDoubleTrack(geometry, temporary = false, sectionId = null, crossoverEnds = [], route = null) {
+      function createDoubleTrack(geometry, temporary = false, sectionId = null, crossoverEnds = [], route = null, junctions = []) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('class', temporary ? 'double-track-preview' : 'double-track-section');
         if (sectionId !== null) group.setAttribute('data-track-section-id', String(sectionId));
@@ -2025,6 +2091,10 @@
           }
           if (geometry.stationTarget && crossoverEnds.includes('destination')) {
             const crossover = createScissorsCrossover(geometry, true, zoom);
+            if (crossover) group.append(crossover);
+          }
+          for (const meters of junctions) {
+            const crossover = createScissorsCrossover(geometry, false, zoom, meters);
             if (crossover) group.append(crossover);
           }
           if (route) {
@@ -2072,14 +2142,15 @@
         if (!origin) return { error: '駅・車両基地につながる線路端を選択してください' };
         if (!target && !targetStation) return { error: '地図上で行き先をタップしてください' };
         if (targetStation) {
+          const junction = targetStation.type === 'junction' && geometries.get(targetStation.sectionId);
           const station = targetStation.type === 'station'
             ? positions.find(item => item.id === targetStation.stationId && isOnCurrentLevel(item)) : null;
           const depot = targetStation.type === 'depot'
             ? depots.find(item => item.id === targetStation.depotId && isOnCurrentLevel(item)) : null;
-          if (!station && !depot) return { error: '同じ階層の駅・車両基地にのみ接続できます' };
+          if (!station && !depot && !junction) return { error: '同じ階層の駅・車両基地・本線にのみ接続できます' };
           if (source.type === 'station' && station?.id === source.stationId) return { error: '同じ駅の両端同士は接続できません' };
           if (source.type === 'depot' && depot?.id === source.depotId) return { error: '同じ車両基地には接続できません' };
-          if (trackSections.filter(isOnCurrentLevel).some(section =>
+          if (targetStation.type !== 'junction' && trackSections.filter(isOnCurrentLevel).some(section =>
             trackOriginKey(section.source) === trackOriginKey(targetStation) ||
             (section.targetStation && trackOriginKey(section.targetStation) === trackOriginKey(targetStation)))) {
             return { error: station ? `${station.name}の${stationSideLabel(targetStation.side)}には既に線路が接続されています`
@@ -2087,6 +2158,7 @@
           }
         }
         const end = targetStation && resolveTrackOrigin(targetStation, geometries);
+        if (targetStation && !end) return { error: '接続先の本線の位置が取得できません' };
         const calculated = targetStation
           ? via ? makeWaypointConnectionTrack(origin, end, via.points.map(targetCanvasPoint)) : makeStationConnectionTrack(origin, end)
           : makeAutomaticTrack(origin, targetCanvasPoint(target));
@@ -2097,6 +2169,7 @@
           const existing = geometries.get(section.id);
           if (!existing) continue;
           const connectedParent = source.type === 'section' && source.sectionId === section.id;
+          const junctionHost = targetStation?.type === 'junction' && targetStation.sectionId === section.id;
           for (let i = 1; i < candidate.points.length; i++) {
             if (connectedParent && candidate.points[i].distance <= 25) continue;
             const a = candidate.points[i - 1];
@@ -2104,6 +2177,11 @@
             const clearance = TRACK_CLEARANCE_METERS * origin.scale;
             for (let j = 1; j < existing.points.length; j++) {
               if (connectedParent && existing.points[j - 1].distance >= existing.points[existing.points.length - 1].distance - 25) continue;
+              // 分岐器の直近では本線と接することを許す。別の場所の交差は従来どおり禁止。
+              const tangentTurn = Math.abs(angleDifference(candidate.points[i].heading, existing.points[j].heading));
+              if (junctionHost && candidate.points[i].distance >= candidate.lengthMeters - 220 &&
+                  Math.abs(existing.points[j].distance - targetStation.distanceMeters) <= 240 &&
+                  Math.min(tangentTurn, 180 - tangentTurn) <= 25) continue;
               const c = existing.points[j - 1];
               const d = existing.points[j];
               // 遠い線分は矩形の段階で除外し、スマホの長距離路線でも軽く判定する。
@@ -2162,6 +2240,7 @@
       function trackOriginKey(source) {
         if (source.type === 'station') return `station:${source.stationId}:${source.side}`;
         if (source.type === 'depot') return `depot:${source.depotId}`;
+        if (source.type === 'junction') return `junction:${source.depotId}`;
         return `section:${source.sectionId}`;
       }
 
@@ -2349,9 +2428,17 @@
 
       function renderTracks() {
         const geometries = currentTrackGeometry();
+        const junctions = new Map();
+        for (const section of trackSections.filter(isOnCurrentLevel)) {
+          const target = section.targetStation;
+          if (target?.type !== 'junction' || !geometries.has(section.id)) continue;
+          if (!junctions.has(target.sectionId)) junctions.set(target.sectionId, []);
+          junctions.get(target.sectionId).push(target.distanceMeters);
+        }
         tracksLayer.replaceChildren(...trackSections.filter(isOnCurrentLevel)
           .filter(section => geometries.has(section.id))
-          .map(section => createDoubleTrack(geometries.get(section.id), false, section.id, section.crossoverEnds, routeById(section.routeId))));
+          .map(section => createDoubleTrack(geometries.get(section.id), false, section.id, section.crossoverEnds,
+            routeById(section.routeId), junctions.get(section.id) || [])));
         renderTrackPreview();
       }
 
@@ -2696,6 +2783,7 @@
         if (!endpoint) return '';
         if (endpoint.type === 'depot') return `depot:${endpoint.depotId}`;
         if (endpoint.type === 'station') return `station:${endpoint.stationId}:${endpoint.side}`;
+        if (endpoint.type === 'junction') return `junction:${endpoint.depotId}`;
         if (endpoint.type === 'section') return `section:${endpoint.sectionId}`;
         return '';
       }
@@ -2703,6 +2791,52 @@
       function reversedRailPoints(points, totalMeters) {
         return [...points].reverse().map(point => ({ ...point, distance: totalMeters - point.distance,
           heading: normalDegrees(point.heading + 180) }));
+      }
+
+      function mainlineIntervalPoints(shape, begin, end) {
+        const sampled = [railPointAtDistance(shape, begin),
+          ...shape.points.filter(point => point.distance > begin && point.distance < end),
+          railPointAtDistance(shape, end)];
+        return sampled.map(point => ({ ...point, distance: point.distance - begin,
+          spacing: trackSpacingAt(shape, point.distance) }));
+      }
+
+      function depotRoutePath(adjacency, depot, endStation) {
+        const start = `depot:${depot.id}`;
+        const distances = new Map([[start, 0]]);
+        const parents = new Map();
+        const queue = [{ node: start, meters: 0 }];
+        // 路線が分岐していても、選択方向の終端までの最短の合法な接続経路を選ぶ。
+        while (queue.length) {
+          queue.sort((a, b) => a.meters - b.meters);
+          const item = queue.shift();
+          if (item.meters !== distances.get(item.node)) continue;
+          for (const edge of adjacency.get(item.node) || []) {
+            if (edge.to.startsWith('depot:') && edge.to !== start) continue;
+            if (edge.routeId !== depot.routeId && !Number.isInteger(
+              positions.find(station => station.id === edge.stationId)?.routeNumbers?.[depot.routeId])) continue;
+            const meters = item.meters + edge.lengthMeters;
+            if (meters >= (distances.get(edge.to) ?? Infinity)) continue;
+            distances.set(edge.to, meters);
+            parents.set(edge.to, edge);
+            queue.push({ node: edge.to, meters });
+          }
+        }
+        const possibilities = [];
+        for (const side of [-1, 1]) {
+          let node = `station:${endStation.id}:${side}`;
+          if (!distances.has(node)) continue;
+          const edges = [];
+          while (node !== start && parents.has(node)) {
+            const edge = parents.get(node);
+            edges.unshift(edge);
+            node = edge.from;
+          }
+          if (node === start && edges.some(edge => edge.stationId === endStation.id))
+            possibilities.push({ edges, distance: distances.get(`station:${endStation.id}:${side}`) });
+        }
+        possibilities.sort((a, b) => a.distance - b.distance);
+        return possibilities[0]?.edges || null;
       }
 
       function buildDepotJourney(depot, service = null) {
@@ -2724,9 +2858,18 @@
           const shape = geometry.get(section.id);
           if (!shape) continue;
           const length = shape.points.at(-1).distance;
-          addEdge(railNodeKey(section.source), railNodeKey(section.targetStation || { type: 'section', sectionId: section.id }),
-            shape.points.map(point => ({ ...point, spacing: trackSpacingAt(shape, point.distance) })),
-            length, null, section.routeId);
+          const junctions = trackSections.filter(other => isOnCurrentLevel(other) &&
+            other.targetStation?.type === 'junction' && other.targetStation.sectionId === section.id)
+            .map(other => ({ meters: other.targetStation.distanceMeters, depotId: other.targetStation.depotId }))
+            .sort((a, b) => a.meters - b.meters);
+          const parts = [{ meters: 0, node: railNodeKey(section.source) },
+            ...junctions.map(junction => ({ meters: junction.meters, node: `junction:${junction.depotId}` })),
+            { meters: length, node: railNodeKey(section.targetStation || { type: 'section', sectionId: section.id }) }];
+          for (let i = 1; i < parts.length; i++) {
+            const a = parts[i - 1], b = parts[i];
+            addEdge(a.node, b.node, mainlineIntervalPoints(shape, a.meters, b.meters),
+              b.meters - a.meters, null, section.routeId);
+          }
         }
         for (const station of positions.filter(isOnCurrentLevel)) {
           const a = resolveTrackOrigin({ type: 'station', stationId: station.id, side: -1 }, geometry);
@@ -2750,21 +2893,34 @@
         const points = [{ x: mouth.x - Math.cos(radians) * depotWidth * mouth.scale,
           y: mouth.y - Math.sin(radians) * depotWidth * mouth.scale, heading: mouth.heading, spacing: 0, distance: 0 },
         { x: mouth.x, y: mouth.y, heading: mouth.heading, spacing: 0, distance: depotWidth }];
-        const visited = new Set();
         const stations = [];
-        let current = `depot:${depot.id}`;
         let totalMeters = depotWidth;
-        for (let hops = 0; hops < 120; hops++) {
-          const available = (adjacency.get(current) || []).filter(edge => !visited.has([edge.from, edge.to].sort().join('|')));
-          if (!available.length) break;
-          available.sort((a, b) => Number(b.routeId === service?.routeId) - Number(a.routeId === service?.routeId));
-          const edge = available[0];
-          visited.add([edge.from, edge.to].sort().join('|'));
+        const lineStations = serviceStations(depot.routeId).filter(isOnCurrentLevel);
+        const direction = depot.direction === 'up' ? 'up' : 'down';
+        const terminal = direction === 'up' ? lineStations[0] : lineStations.at(-1);
+        let path = terminal && depotRoutePath(adjacency, depot, terminal);
+        // 以前からある手動の基地→駅接続も残す（路線指定前の試運転など）。
+        if (!routeById(depot.routeId)) {
+          const visited = new Set();
+          const manualPath = [];
+          let node = `depot:${depot.id}`;
+          for (let hop = 0; hop < 120; hop++) {
+            const available = (adjacency.get(node) || []).filter(edge => !visited.has([edge.from, edge.to].sort().join('|')));
+            if (!available.length) break;
+            available.sort((a, b) => Number(b.routeId === service?.routeId) - Number(a.routeId === service?.routeId));
+            const edge = available[0];
+            visited.add([edge.from, edge.to].sort().join('|'));
+            manualPath.push(edge);
+            node = edge.to;
+            if (node.startsWith('depot:')) break;
+          }
+          path = manualPath;
+        }
+        if (!path) return { error: `${direction === 'up' ? '上り' : '下り'}方向の駅まで線路がつながっていません。接続位置と路線を確認してください。` };
+        for (const edge of path) {
           for (const point of edge.points.slice(1)) points.push({ ...point, distance: totalMeters + point.distance });
           if (edge.stationId) stations.push({ stationId: edge.stationId, center: totalMeters + edge.lengthMeters / 2 });
           totalMeters += edge.lengthMeters;
-          current = edge.to;
-          if (current.startsWith('depot:')) break;
         }
         const startFront = (depotWidth + vehicle.cars * CAR_LENGTH_METERS) / 2;
         const reachable = stations.filter(stop => {
@@ -2798,6 +2954,7 @@
         depotDispatchButton.disabled = !depot.vehicleId || !depotHasRailConnection(depot.id) || !!depotRun || !!vehicleRun;
         depotReturnButton.disabled = !run || run.phase !== 'waiting';
         depotServiceSelect.disabled = !depot.vehicleId || !!run;
+        depotDirectionSelect.disabled = !!run;
         if (message) depotStatus.textContent = message;
       }
 
@@ -3369,6 +3526,7 @@
         depotRouteSelect.replaceChildren(routeSelectOption('', '路線を選択'),
           ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
         depotRouteSelect.value = routeById(depot.routeId) ? String(depot.routeId) : '';
+        depotDirectionSelect.value = depot.direction === 'up' ? 'up' : 'down';
         depotInfo.textContent = stock
           ? `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／${stock.name} ${stock.cars}両を留置中／車両番号 ${depot.unitId}`
           : `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／空線：新規列車を購入できます`;
@@ -3378,8 +3536,8 @@
         const route = routeById(depot.routeId);
         depotGuidance.textContent = !route
           ? '接続路線を選択してください。基地を移動・回転して位置を調整できます。'
-          : connected ? `${route.name}に自動接続済み。移動・回転後も線路を再計算します。`
-            : `${route.name}への自動接続待ち。同じ階層の空き駅端に近づけ、基地の出入口の向きを合わせてください。`;
+          : connected ? `${route.name}の複線途中に分岐接続済み。上り・下りを選んで出庫できます。`
+            : `${route.name}への自動接続待ち。同じ階層の本線に近づけ、基地の出入口を線路側へ向けてください。`;
         depotBuyButton.disabled = !!stock || !!tooLong;
         depotVehicleSelect.disabled = !!stock;
         if (stock) depotVehicleSelect.value = stock.id;
@@ -4011,6 +4169,12 @@
         updateDepotPanel(depot.serviceId
           ? `第${depot.unitId}編成に「${serviceById(depot.serviceId).name}」を設定しました。`
           : `第${depot.unitId}編成を回送扱いにしました。`);
+      });
+      depotDirectionSelect.addEventListener('change', () => {
+        const depot = selectedDepot();
+        if (!depot || depotRun?.depot.id === depot.id) return;
+        depot.direction = depotDirectionSelect.value === 'up' ? 'up' : 'down';
+        updateDepotPanel(`${depot.direction === 'up' ? '上り' : '下り'}方向への出庫を設定しました。`);
       });
       depotDispatchButton.addEventListener('click', startDepotRun);
       depotReturnButton.addEventListener('click', beginDepotReturn);
