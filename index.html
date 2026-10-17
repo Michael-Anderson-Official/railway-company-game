@@ -63,6 +63,8 @@
     .catchment-distance { fill: #174c97; font-size: 12px; font-weight: 800; paint-order: stroke; stroke: white; stroke-width: 3px; }
     .double-track, .track-preview { pointer-events: none; }
     .double-track path { fill: none; stroke: #27384d; stroke-linecap: round; stroke-linejoin: round; }
+    .scissors-crossover { pointer-events: none; }
+    .scissors-crossover .crossover-rail { fill: none; stroke: #27384d; stroke-linecap: round; stroke-linejoin: round; }
     .track-preview path { fill: none; stroke: #3274cf; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5; }
     .track-preview .track-target { fill: #fff; stroke: #3274cf; }
     .station-endpoints { pointer-events: none; }
@@ -258,7 +260,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">駅は縦向きに配置。複線建設では同じ階の駅端をタップして接続できます</span>
+        <span class="tool-hint">駅は縦向きに配置。複線をつなぐと駅端にX字渡り線を設置します</span>
       </div>
     </header>
     <section class="workspace" aria-label="線路を配置する白紙のキャンバス">
@@ -339,7 +341,7 @@
         <p class="track-note" id="track-destination">接続先の駅の上端・下端をタップしてください。駅以外の場所も終点にできます。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">上り側／下り側は仮の呼称です。駅端への接続は確認後に建設します。選択した階層内で曲線半径・交差を確認します。ドラッグは地図移動、2本指は拡大縮小。</p>
+        <p class="track-note">上り側／下り側は仮の呼称です。駅端へ複線を接続すると、X字型の渡り線を自動設置します。ポイントの切替・列車運行は未実装です。ドラッグは地図移動、2本指は拡大縮小。</p>
       </div>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
         <div class="connection-panel">
@@ -430,6 +432,9 @@
       const TRACK_CLEARANCE_METERS = 8;
       const TRACK_MAX_TURN_DEGREES = 90;
       const TRACK_SAMPLE_METERS = 10;
+      const CROSSOVER_START_METERS = 10;
+      const CROSSOVER_LENGTH_METERS = 100;
+      const CROSSOVER_SAMPLES = 24;
       const DEFAULT_STATION_ROTATION = 90;
       const WALK_CATCHMENT_METERS = 800;
       const INTERCHANGE_RADIUS_METERS = 250;
@@ -900,7 +905,57 @@
         return base + (geometry.startSpacing - base) * fromStart + (geometry.endSpacing - base) * toEnd;
       }
 
-      function createDoubleTrack(geometry, temporary = false, sectionId = null) {
+      // 駅端から10〜110mの複線内に、両方向へ渡れるX字型のシーサスクロッシングを描く。
+      // 描画座標は既設複線と同じ実距離。曲線区間では複線中心線と直角方向に沿う。
+      function crossoverPoint(geometry, distance, side) {
+        const points = geometry.points;
+        let low = 0;
+        let high = points.length - 1;
+        while (high - low > 1) {
+          const middle = Math.floor((low + high) / 2);
+          if (points[middle].distance < distance) low = middle;
+          else high = middle;
+        }
+        const from = points[low];
+        const to = points[high];
+        const factor = (distance - from.distance) / (to.distance - from.distance || 1);
+        const x = from.x + (to.x - from.x) * factor;
+        const y = from.y + (to.y - from.y) * factor;
+        const heading = normalDegrees(from.heading + angleDifference(to.heading, from.heading) * factor) * Math.PI / 180;
+        const halfGap = trackSpacingAt(geometry, distance) / 2;
+        return { x: x - side * Math.sin(heading) * halfGap,
+          y: y + side * Math.cos(heading) * halfGap };
+      }
+
+      function createScissorsCrossover(geometry, atDestination, zoom) {
+        const totalLength = geometry.points[geometry.points.length - 1].distance;
+        const begin = atDestination
+          ? totalLength - CROSSOVER_START_METERS - CROSSOVER_LENGTH_METERS
+          : CROSSOVER_START_METERS;
+        if (begin < 0 || begin + CROSSOVER_LENGTH_METERS > totalLength) return null;
+        const group = document.createElementNS(SVG_NS, 'g');
+        group.setAttribute('class', 'scissors-crossover');
+        group.setAttribute('data-crossover-end', atDestination ? 'destination' : 'source');
+        group.setAttribute('aria-label', `X字渡り線（${atDestination ? '接続先' : '接続元'}駅側）`);
+        // 2本の渡り線が中央で交差し、4か所の分岐端で本線に接する。
+        for (const sign of [-1, 1]) {
+          const rail = document.createElementNS(SVG_NS, 'path');
+          rail.setAttribute('class', 'crossover-rail');
+          const points = [];
+          for (let index = 0; index <= CROSSOVER_SAMPLES; index++) {
+            const t = index / CROSSOVER_SAMPLES;
+            const eased = t * t * (3 - 2 * t);
+            const point = crossoverPoint(geometry, begin + CROSSOVER_LENGTH_METERS * t, sign * (1 - 2 * eased));
+            points.push(`${index ? 'L' : 'M'} ${point.x} ${point.y}`);
+          }
+          rail.setAttribute('d', points.join(' '));
+          rail.setAttribute('stroke-width', String(2 / zoom));
+          group.append(rail);
+        }
+        return group;
+      }
+
+      function createDoubleTrack(geometry, temporary = false, sectionId = null, crossoverEnds = []) {
         const group = document.createElementNS(SVG_NS, 'g');
         group.setAttribute('class', temporary ? 'double-track-preview' : 'double-track-section');
         if (sectionId !== null) group.setAttribute('data-track-section-id', String(sectionId));
@@ -923,6 +978,16 @@
           line.setAttribute('d', d);
           line.setAttribute('stroke-width', String((temporary ? 2.4 : 2) / zoom));
           group.append(line);
+        }
+        if (!temporary) {
+          if (geometry.stationSource && crossoverEnds.includes('source')) {
+            const crossover = createScissorsCrossover(geometry, false, zoom);
+            if (crossover) group.append(crossover);
+          }
+          if (geometry.stationTarget && crossoverEnds.includes('destination')) {
+            const crossover = createScissorsCrossover(geometry, true, zoom);
+            if (crossover) group.append(crossover);
+          }
         }
         if (temporary) {
           const end = geometry.points[geometry.points.length - 1];
@@ -1175,7 +1240,7 @@
         const geometries = currentTrackGeometry();
         tracksLayer.replaceChildren(...trackSections.filter(isOnCurrentLevel)
           .filter(section => geometries.has(section.id))
-          .map(section => createDoubleTrack(geometries.get(section.id), false, section.id)));
+          .map(section => createDoubleTrack(geometries.get(section.id), false, section.id, section.crossoverEnds)));
         renderTrackPreview();
       }
 
@@ -1791,7 +1856,9 @@
         }
         const id = nextTrackSectionId++;
         trackSections.push({ id, mode: mapMode, level: currentLevel, source: { ...selected.source },
-          target: { ...trackDestination }, ...(trackTargetStation ? { targetStation: { ...trackTargetStation } } : {}) });
+          target: { ...trackDestination }, ...(trackTargetStation ? { targetStation: { ...trackTargetStation } } : {}),
+          crossoverEnds: [selected.source.type === 'station' ? 'source' : null,
+            trackTargetStation ? 'destination' : null].filter(Boolean) });
         const stationConnection = !!trackTargetStation;
         connectionDialog.hidden = true;
         trackTargetStation = null;
@@ -1799,7 +1866,7 @@
         syncTrackOrigins(stationConnection ? '' : `section:${id}`);
         redrawPlaced();
         updateStationEditor();
-        hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを${stationConnection ? '駅の線路端まで接続しました' : '自動敷設しました。次の行き先をタップして延長できます'}`;
+        hint.textContent = `${floorLabel()}に複線${id}：約${Math.round(result.lengthMeters).toLocaleString('ja-JP')}mを${stationConnection ? '駅の線路端まで接続し、両駅側にX字渡り線を設置しました' : selected.source.type === 'station' ? '自動敷設し、駅端にX字渡り線を設置しました' : '自動敷設しました。次の行き先をタップして延長できます'}`;
       }
       trackBuildButton.addEventListener('click', () => trackTargetStation ? openConnectionDialog() : buildTrack());
       connectionConfirm.addEventListener('click', buildTrack);

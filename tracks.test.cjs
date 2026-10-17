@@ -101,6 +101,24 @@ function terminalCenter(group) {
   const b = pathPoints(group.children[1].attributes.d).at(-1);
   return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
 }
+function checkCrossovers(section, ends) {
+  const crossovers = section.children.slice(2);
+  assert.equal(crossovers.length, ends.length, 'X crossovers appear only at connected station ends');
+  assert.deepEqual(crossovers.map(group => group.attributes['data-crossover-end']), ends);
+  for (const crossover of crossovers) {
+    assert.equal(crossover.attributes.class, 'scissors-crossover');
+    assert.equal(crossover.children.length, 2, 'an X consists of two crossing rail paths');
+    const a = pathPoints(crossover.children[0].attributes.d);
+    const b = pathPoints(crossover.children[1].attributes.d);
+    assert.equal(a.length, 25);
+    assert.equal(b.length, 25);
+    assert.ok(Math.hypot(a[0].x - b[0].x, a[0].y - b[0].y) > .2, 'X begins on different rails');
+    assert.ok(Math.hypot(a.at(-1).x - b.at(-1).x, a.at(-1).y - b.at(-1).y) > .2,
+      'X finishes on different rails');
+    assert.ok(Math.hypot(a[12].x - b[12].x, a[12].y - b[12].y) < 1e-6,
+      'both crossover paths intersect at the same center point');
+  }
+}
 function commit() { nodes['#build-track'].dispatch('click'); }
 
 assert.equal(routes().length, 0);
@@ -173,7 +191,8 @@ assert.match(nodes['#track-destination'].textContent, /約600m/);
 for (let i = 0; i < 2; i++) nodes['#zoom-out'].dispatch('click');
 commit();
 assert.equal(routes().length, 1);
-assert.equal(routes()[0].children.length, 2);
+assert.equal(routes()[0].children.length, 3);
+checkCrossovers(routes()[0], ['source']);
 assert.match(routes()[0].children[0].attributes.d, /^M /);
 assert.match(routes()[0].children[1].attributes.d, /^M /);
 
@@ -197,6 +216,7 @@ assert.equal(nodes['#build-track'].disabled, false);
 const before = pathPoints(routes()[0].children[0].attributes.d).at(-1);
 commit();
 assert.equal(routes().length, 2);
+checkCrossovers(routes()[1], []);
 const after = pathPoints(routes()[1].children[0].attributes.d)[0];
 assert.ok(Math.hypot(before.x - after.x, before.y - after.y) < .01, 'continuation joins exactly');
 
@@ -257,7 +277,7 @@ tapTarget(blankEnd.x - 500, blankEnd.y);
 assert.equal(nodes['#build-track'].disabled, false);
 commit();
 assert.equal(routes().length, 1);
-assert.equal(routes()[0].children.length, 2);
+checkCrossovers(routes()[0], ['source']);
 nodes['#map-mode'].value = 'kariya';
 nodes['#map-mode'].dispatch('change');
 assert.equal(routes().length, 2, 'city route remains when toggling maps');
@@ -292,6 +312,7 @@ tapTarget(Number(b2Center[1]) - 850 * expectedMetersToSvg, Number(b2Center[2]));
 assert.equal(nodes['#build-track'].disabled, false, 'B1 line at the same level XY does not block B2');
 commit();
 assert.equal(routes().length, 1);
+checkCrossovers(routes()[0], ['source']);
 nodes['#floor-level'].value = '-1';
 nodes['#floor-level'].dispatch('change');
 assert.equal(routes().length, 2, 'B1 tracks remain after building B2');
@@ -338,6 +359,7 @@ tapTarget(targetPoint.x, targetPoint.y, 32);
 nodes['#connection-confirm'].dispatch('click');
 assert.equal(nodes['#connection-dialog'].hidden, true);
 assert.equal(routes().length, 1);
+checkCrossovers(routes()[0], ['source', 'destination']);
 assert.ok(Math.abs(endpointGap(routes()[0]) - 12 * expectedMetersToSvg) < .005, 'source joins 12m spaced station rails');
 assert.ok(Math.abs(endpointGap(routes()[0], true) - 12 * expectedMetersToSvg) < .005, 'destination joins 12m spaced station rails');
 const destinationCenterMatch = nodes['#placed'].children[1].attributes.transform.match(/translate\(([-\d.eE+]+) ([-\d.eE+]+)\)/);
@@ -366,6 +388,7 @@ tapTarget(Number(offsetMarker[1]), Number(offsetMarker[2]));
 assert.equal(nodes['#connection-dialog'].hidden, false, nodes['#track-validation'].textContent);
 nodes['#connection-confirm'].dispatch('click');
 assert.equal(routes().length, 1);
+checkCrossovers(routes()[0], ['source', 'destination']);
 const railA = pathPoints(routes()[0].children[0].attributes.d);
 const railB = pathPoints(routes()[0].children[1].attributes.d);
 const mid = index => ({ x: (railA[index].x + railB[index].x) / 2, y: (railA[index].y + railB[index].y) / 2 });
@@ -376,4 +399,4 @@ assert.ok(Math.abs(mid(1).x - beginning.x) < .05, 'the route leaves the origin o
 assert.ok(Math.abs(mid(railA.length - 2).x - ending.x) < .05, 'the route enters the destination on its vertical tangent');
 assert.ok(Math.abs(endpointGap(routes()[0], true) - 12 * expectedMetersToSvg) < .005);
 
-console.log('Automatic tracks, station-end connection confirmation, safety, mobile gestures, map and six-floor isolation OK');
+console.log('Automatic double tracks, station-end X crossovers, station connections, safety, mobile gestures and six-floor isolation OK');
