@@ -46,7 +46,7 @@ const nodes = Object.fromEntries([
   '#car-count', '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#deselect-station',
   '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
-  '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand', '#track-editor', '#track-origin', '#track-route',
+  '#zoom-in', '#zoom-out', '#follow-train', '#demand-overview', '#station-demand', '#track-editor', '#track-origin', '#track-route',
   '#track-destination', '#build-track', '#track-validation', '#connection-dialog', '#connection-question',
   '#connection-detail', '#connection-confirm', '#connection-cancel', '#interchange-dialog',
   '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'

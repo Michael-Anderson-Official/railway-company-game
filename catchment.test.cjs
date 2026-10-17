@@ -47,7 +47,7 @@ const nodes = Object.fromEntries([
   '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
-  '#station-name', '#station-interchange', '#deselect-station', '#zoom-in', '#zoom-out', '#demand-overview', '#station-demand',
+  '#station-name', '#station-interchange', '#deselect-station', '#zoom-in', '#zoom-out', '#follow-train', '#demand-overview', '#station-demand',
   '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
   '#track-editor', '#track-origin', '#track-route', '#track-destination', '#build-track', '#track-validation',
   '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel',

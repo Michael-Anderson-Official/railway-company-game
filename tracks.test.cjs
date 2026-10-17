@@ -51,7 +51,7 @@ const ids = [
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
-  '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out',
+  '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out', '#follow-train',
   '#track-editor', '#track-origin', '#track-route', '#track-destination', '#build-track', '#track-validation',
   '#connection-dialog', '#connection-question', '#connection-detail', '#connection-confirm', '#connection-cancel',
   '#interchange-dialog', '#interchange-question', '#interchange-detail', '#interchange-confirm', '#interchange-cancel'
@@ -69,12 +69,16 @@ nodes['#vehicle-speed'].value = '5';
 nodes['#fleet-panel'].hidden = true;
 const board = nodes['#board'];
 const html = fs.readFileSync(path.join(__dirname, 'index.html'), 'utf8');
+assert.match(html, /html, body\s*\{\s*touch-action:\s*manipulation;\s*\}/,
+  'browser double-tap zoom must be disabled without disabling accessible pinch zoom');
+assert.match(html, /#board\s*\{[^}]*touch-action:\s*none;/,
+  'board keeps custom two-finger map zoom');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const windowMock = new Element();
 const frameCallbacks = new Map();
 let frameSequence = 1;
 const scriptWithHooks = script.replace('      loadPopulationData();',
-  '      window.vehicleTestHooks = { ROLLING_STOCK, currentAcceleration, advanceVehicle, positions, depots, services, buildDepotJourney, selectDepot, depotRun: () => depotRun };\n      loadPopulationData();');
+  '      window.vehicleTestHooks = { ROLLING_STOCK, currentAcceleration, advanceVehicle, positions, depots, services, buildDepotJourney, selectDepot, depotRun: () => depotRun, trackedTrain, vehiclePointAt };\n      loadPopulationData();');
 vm.runInNewContext(scriptWithHooks, {
   document: { querySelector: key => nodes[key], createElement: name => new Element(name), createElementNS: () => new Element() },
   window: windowMock, Math, Map,
@@ -103,6 +107,13 @@ function mouseTap(x, y) { mouse('pointerdown', x, y); mouse('pointerup', x, y); 
 function screenFromCanvas(x, y) {
   const [startX, startY, width, height] = board.attributes.viewBox.split(' ').map(Number);
   return { x: (x - startX) * 400 / width, y: (y - startY) * 600 / height };
+}
+function assertTrackingCentered(label) {
+  const [x, y, width, height] = board.attributes.viewBox.split(' ').map(Number);
+  const train = windowMock.vehicleTestHooks.trackedTrain();
+  const center = windowMock.vehicleTestHooks.vehiclePointAt(train.route, train.centerMeters);
+  assert.ok(Math.abs(x + width / 2 - center.x) < 1e-6, `${label}: camera follows train center X`);
+  assert.ok(Math.abs(y + height / 2 - center.y) < 1e-6, `${label}: camera follows train center Y`);
 }
 function tapTarget(x, y, touchId = null) {
   const p = screenFromCanvas(x, y);
@@ -456,6 +467,7 @@ for (const vehicle of Object.values(ROLLING_STOCK)) {
   assert.ok(state.maxObservedKmh <= vehicle.maxServiceKmh + 1e-8, 'actual running speed respects service maximum');
 }
 nodes['#fleet-tool'].dispatch('click');
+assert.equal(nodes['#follow-train'].disabled, true, 'tracking is unavailable without a train');
 assert.equal(nodes['#fleet-panel'].hidden, false, 'rolling stock catalog opens');
 assert.equal(nodes['#vehicle-route'].children.length, 1, 'station-connected route is selectable');
 assert.equal(nodes['#fleet-preview'].children.length, 6, 'Meitetsu six-car preview');
@@ -463,10 +475,31 @@ assert.equal(nodes['#vehicle-hero'].children[0].attributes.viewBox, '0 0 444 128
 assert.match(nodes['#vehicle-illustration-caption'].textContent, /名鉄2200系/);
 nodes['#vehicle-run'].dispatch('click');
 assert.equal(nodes['#train-layer'].children.length, 6, 'six real-length cars appear on constructed track');
+assert.equal(nodes['#follow-train'].disabled, false, 'tracking becomes available during a test run');
+const initialTrackingWidth = Number(board.attributes.viewBox.split(' ')[2]);
+nodes['#follow-train'].dispatch('click');
+assert.equal(nodes['#follow-train'].attributes['aria-pressed'], 'true', 'tracking can be enabled');
+assertTrackingCentered('test departure');
 assert.equal(nodes['#train-layer'].children[0].attributes.class, 'rolling-stock-car');
 assert.ok(nodes['#train-layer'].children[0].children.some(child => /train-roof/.test(child.attributes.class || '')),
   'Meitetsu running train renders rooftop details');
 advanceFrames(40);
+assertTrackingCentered('test moving');
+assert.equal(Number(board.attributes.viewBox.split(' ')[2]), initialTrackingWidth,
+  'tracking does not automatically zoom');
+mouse('pointerdown', 245, 265);
+mouse('pointermove', 285, 280);
+mouse('pointerup', 285, 280);
+assert.equal(nodes['#follow-train'].attributes['aria-pressed'], 'false', 'manual drag cancels tracking');
+nodes['#follow-train'].dispatch('click');
+assertTrackingCentered('tracking resumes');
+touch('pointerdown', 301, 140, 180);
+touch('pointerdown', 302, 260, 180);
+assert.equal(nodes['#follow-train'].attributes['aria-pressed'], 'false', 'two-finger pinch cancels tracking');
+touch('pointerup', 302, 260, 180);
+touch('pointerup', 301, 140, 180);
+nodes['#follow-train'].dispatch('click');
+assertTrackingCentered('tracking after pinch');
 assert.match(nodes['#vehicle-status'].textContent, /名鉄2200系/);
 assert.equal(nodes['#vehicle-run'].disabled, true, 'only one train trial runs at once');
 nodes['#vehicle-emergency'].dispatch('click');
@@ -475,6 +508,7 @@ advanceFrames(80);
 assert.equal(nodes['#vehicle-run'].disabled, false, 'emergency stop returns controls');
 nodes['#vehicle-stop'].dispatch('click');
 assert.equal(nodes['#train-layer'].children.length, 0, 'reset clears the train without removing rails');
+assert.equal(nodes['#follow-train'].disabled, true, 'reset disables tracking');
 nodes['#vehicle-model'].value = 'keio5000';
 nodes['#vehicle-model'].dispatch('change');
 assert.equal(nodes['#fleet-preview'].children.length, 10, 'Keio ten-car preview');
@@ -807,17 +841,24 @@ assert.equal(plan.outwardStops.length, 1);
 nodes['#depot-speed'].value = '30';
 nodes['#depot-dispatch'].dispatch('click');
 assert.ok(model.depotRun(), nodes['#depot-status'].textContent);
+assert.equal(nodes['#follow-train'].disabled, false, 'depot dispatch enables tracking');
+nodes['#follow-train'].dispatch('click');
+assertTrackingCentered('depot dispatch');
 assert.equal(nodes['#depot-dispatch'].disabled, true, 'a second departure is impossible during operation');
 assert.equal(nodes['#train-layer'].children.length, 6, 'outbound consist uses six animated car bodies');
 assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 0,
   'stationary duplicate is hidden while its unit travels');
 advanceFrames(1500);
+assertTrackingCentered('outbound train at terminus');
 assert.equal(nodes['#depot-return'].disabled, false, `train arrived and awaits return: ${nodes['#depot-status'].textContent}`);
 assert.match(nodes['#depot-status'].textContent, /折返し待機/);
 nodes['#depot-return'].dispatch('click');
 assert.equal(nodes['#depot-return'].disabled, true, 'return instruction is single use');
+advanceFrames(10);
+assertTrackingCentered('return trip');
 advanceFrames(1500);
 assert.equal(model.depotRun(), null, `train has returned into storage: ${nodes['#depot-status'].textContent}`);
+assert.equal(nodes['#follow-train'].disabled, true, 'arrival into depot ends tracking');
 assert.equal(b2Depot.vehicleId, 'meitetsu2200', 'arrival preserves owned vehicle');
 assert.match(nodes['#depot-status'].textContent, /入庫しました/);
 assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 6,
