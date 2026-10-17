@@ -170,8 +170,8 @@
     .station-route-editor { padding: 10px 0; margin: 10px 0 0; border-top: 1px solid #e4edf9; }
     .station-route-editor h3 { font-size: 12px; margin: 0 0 8px; color: #254767; }
     .station-route-fields { display: grid; grid-template-columns: minmax(0, 1fr) 76px; gap: 7px; }
-    .station-route-fields select, .station-route-fields input, .route-manager input, .route-manager select { width: 100%; min-width: 0; min-height: 39px; border: 1px solid #cbd8eb; border-radius: 8px; padding: 7px 9px; background: #fff; color: #203047; font: inherit; font-size: 15px; }
-    .station-route-fields label, .route-manager label { display: grid; gap: 4px; color: #536a80; font-size: 11px; font-weight: 750; }
+    .station-route-fields select, .station-route-fields input, .route-manager input, .route-manager select, .service-manager input, .service-manager select, .depot-panel select { width: 100%; min-width: 0; min-height: 39px; border: 1px solid #cbd8eb; border-radius: 8px; padding: 7px 9px; background: #fff; color: #203047; font: inherit; font-size: 15px; }
+    .station-route-fields label, .route-manager label, .service-manager label, .depot-panel .depot-field { display: grid; gap: 4px; color: #536a80; font-size: 11px; font-weight: 750; }
     .station-route-fields button { grid-column: 1 / -1; min-height: 39px; border: 0; border-radius: 8px; background: #2158a3; color: #fff; font: inherit; font-size: 12px; font-weight: 800; cursor: pointer; }
     .station-route-fields button:disabled { background: #aab8c8; cursor: not-allowed; }
     .station-route-list { display: flex; gap: 5px; flex-wrap: wrap; margin-top: 8px; }
@@ -179,7 +179,7 @@
     .station-route-chip b { font-variant-numeric: tabular-nums; }
     .station-route-chip button { border: 0; padding: 0 5px; background: transparent; color: #6c7785; font: inherit; font-size: 16px; cursor: pointer; }
     .station-route-status { margin: 6px 0 0; min-height: 15px; font-size: 11px; color: #1d537e; }
-    .station-route-status.invalid, .route-manager-status.invalid { color: #b32838; }
+    .station-route-status.invalid, .route-manager-status.invalid, .service-status.invalid { color: #b32838; }
     .station-interchange { margin: -1px 0 9px; color: #7644ac; font-size: 12px; font-weight: 750; }
     .station-interchange[hidden] { display: none; }
     .editor-rotation { display: flex; align-items: center; gap: 8px; }
@@ -265,9 +265,9 @@
       background: #fffffff8; box-shadow: 0 8px 30px #15283f26;
     }
     .depot-panel[hidden] { display: none; }
-    .route-manager { position: absolute; z-index: 6; right: 14px; bottom: 54px; width: min(390px, calc(100% - 28px)); max-height: min(72dvh, 640px); overflow-y: auto; padding: 14px; border: 1px solid #a9c4dd; border-radius: 14px; background: #fffffff9; box-shadow: 0 8px 30px #15283f26; }
-    .route-manager[hidden] { display: none; }
-    .route-manager h2 { margin: 0; font-size: 16px; }
+    .route-manager, .service-manager { position: absolute; z-index: 6; right: 14px; bottom: 54px; width: min(390px, calc(100% - 28px)); max-height: min(72dvh, 640px); overflow-y: auto; padding: 14px; border: 1px solid #a9c4dd; border-radius: 14px; background: #fffffff9; box-shadow: 0 8px 30px #15283f26; }
+    .route-manager[hidden], .service-manager[hidden] { display: none; }
+    .route-manager h2, .service-manager h2 { margin: 0; font-size: 16px; }
     .route-manager-heading { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .route-manager-heading button { background: transparent; border: 0; color: #62728a; font-size: 25px; cursor: pointer; }
     .route-manager-fields { display: grid; gap: 9px; }
@@ -280,6 +280,16 @@
     .route-list-item strong { display: block; color: #223b57; font-size: 12px; }
     .route-list-item small { display: block; margin-top: 4px; color: #63758a; line-height: 1.45; font-size: 11px; }
     .route-manager-note { margin-top: 9px; font-size: 11px; line-height: 1.5; color: #687c90; }
+    .service-fields { display: grid; gap: 9px; }
+    .service-stops { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 10px 0; }
+    .service-stop { display: flex; flex-direction: column; gap: 3px; min-height: 56px; text-align: left; padding: 8px 10px; border: 1px solid #c7d7ea; border-radius: 9px; background: #f7faff; color: #314b68; font: inherit; font-size: 12px; cursor: pointer; }
+    .service-stop strong { color: #205aa0; font-size: 11px; }
+    .service-stop[aria-pressed="true"] { background: #2368af; border-color: #2368af; color: white; }
+    .service-stop[aria-pressed="true"] strong { color: #e0f4ff; }
+    .service-status { min-height: 20px; color: #20598d; font-size: 12px; font-weight: 700; margin: 9px 0 0; }
+    .depot-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 10px 0; }
+    .depot-actions button { min-height: 44px; border: 0; border-radius: 9px; background: #18779a; color: #fff; font: inherit; font-size: 13px; font-weight: 800; }
+    .depot-actions button:disabled { background: #aab6c2; }
     .depot-info { margin: 10px 0; padding: 10px; border-radius: 9px; background: #f0f7f9; color: #285466; font-size: 12px; line-height: 1.6; }
     .depot-guidance { margin: 0 0 9px; color: #536c84; font-size: 11px; line-height: 1.5; }
     .depot-panel .editor-rotation { margin: 0 0 11px; }
@@ -298,7 +308,7 @@
         position: fixed; z-index: 7; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
         left: 10px; right: 10px; width: auto; max-width: 540px;
         margin-inline: auto; display: grid;
-        grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px;
+        grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px;
         padding: 6px; border: 1px solid #183c5c; border-radius: 17px;
         background: #17324dec; box-shadow: 0 8px 28px #10294247;
         -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -340,12 +350,12 @@
       .zoom-controls { top: 10px; right: 10px; }
       .zoom-controls button { width: 38px; height: 38px; }
       .map-credit { right: 7px; bottom: calc(89px + env(safe-area-inset-bottom, 0px)); font-size: 9px; }
-      .station-editor, .track-editor, .fleet-panel, .depot-panel, .route-manager {
+      .station-editor, .track-editor, .fleet-panel, .depot-panel, .route-manager, .service-manager {
         bottom: calc(105px + env(safe-area-inset-bottom, 0px));
         left: 10px; right: 10px; width: auto; max-height: 35dvh;
         overflow-y: auto; padding: 11px 12px; border-radius: 15px;
       }
-      .fleet-panel, .depot-panel, .route-manager { max-height: 39dvh; }
+      .fleet-panel, .depot-panel, .route-manager, .service-manager { max-height: 39dvh; }
       .train-hud { top: 57px; right: 10px; }
     }
     @media(max-width: 360px) {
@@ -401,6 +411,14 @@
             <circle cx="58" cy="29" r="5" fill="currentColor"/>
           </svg>
           路線
+        </button>
+        <button id="service-tool" type="button" aria-expanded="false" aria-controls="service-manager">
+          <svg viewBox="0 0 66 38" fill="none" aria-hidden="true">
+            <rect x="6" y="5" width="54" height="28" rx="7" stroke="currentColor" stroke-width="2.6"/>
+            <path d="M17 14H49M17 24H35" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"/>
+            <circle cx="47" cy="24" r="3.5" fill="currentColor"/>
+          </svg>
+          種別
         </button>
         <div class="settings-fields" id="settings-fields" aria-label="地図と設備の設定">
         <div class="length-control">
@@ -550,7 +568,7 @@
         <p class="track-note" id="track-destination">接続先の駅端・車両基地の出入口をタップしてください。空いた場所も終点にできます。</p>
         <button class="track-submit" id="build-track" type="button" disabled>プレビューの複線を敷設</button>
         <p class="track-validation" id="track-validation" role="status" aria-live="polite">駅を配置してください</p>
-        <p class="track-note">1番線＝上り方面・2番線＝下り方面。駅端にはX字渡り線、1線の車両基地には片側だけの分岐を設置します。ポイント切替・営業ダイヤ運行は未実装。ドラッグで地図移動、2本指で拡大縮小。</p>
+        <p class="track-note">1番線＝上り方面・2番線＝下り方面。駅端にはX字渡り線、1線の車両基地には片側だけの分岐を設置します。自動出入庫走行に対応（信号・時刻表は未実装）。ドラッグで地図移動、2本指で拡大縮小。</p>
       </div>
       <aside class="route-manager" id="route-manager" aria-label="路線の作成と編集" hidden>
         <div class="route-manager-heading"><h2>路線の設定</h2><button id="route-close" type="button" aria-label="路線設定を閉じる">×</button></div>
@@ -565,6 +583,19 @@
         <p id="route-manager-status" class="route-manager-status" role="status" aria-live="polite"></p>
         <div id="route-list" class="route-list" aria-label="作成した路線一覧"></div>
         <p class="route-manager-note">路線を作ったら駅をタップして、その路線の番号（1〜99）を設定できます。1駅を複数路線に登録できます。</p>
+      </aside>
+      <aside class="service-manager" id="service-manager" aria-label="列車種別と停車駅の作成" hidden>
+        <div class="route-manager-heading"><h2>種別・停車駅の設定</h2><button id="service-close" type="button" aria-label="種別設定を閉じる">×</button></div>
+        <div class="service-fields">
+          <label for="service-edit-target">新規作成・編集する種別<select id="service-edit-target"><option value="">＋ 新しい種別</option></select></label>
+          <label for="service-name">種別名<input id="service-name" maxlength="24" placeholder="例：普通・急行・特急" autocomplete="off"></label>
+          <label for="service-route">運行する路線<select id="service-route"><option value="">路線を選択</option></select></label>
+        </div>
+        <p class="route-manager-note">駅番号を設定済みの駅が並びます。各駅をタップして「停車／通過」を切り替えてください。</p>
+        <div class="service-stops" id="service-stops" aria-label="停車駅を選択"></div>
+        <button class="route-manager-save" id="service-save" type="button">この種別を作成</button>
+        <p class="service-status" id="service-status" role="status" aria-live="polite"></p>
+        <div class="route-list" id="service-list" aria-label="作成した列車種別"></div>
       </aside>
       <aside class="fleet-panel" id="fleet-panel" aria-label="車両カタログと試運転" hidden>
         <div class="fleet-heading">
@@ -621,9 +652,19 @@
           </select>
         </label>
         <button id="depot-buy" class="depot-buy" type="button">この基地に1編成を購入</button>
+        <label class="depot-field" for="depot-service" style="margin-top:10px">購入済み編成の運行種別
+          <select id="depot-service"><option value="">回送（種別なし）</option></select>
+        </label>
+        <div class="depot-actions">
+          <button id="depot-dispatch" type="button">出庫・発車</button>
+          <button id="depot-return" type="button" disabled>入庫開始</button>
+        </div>
+        <label class="depot-field" for="depot-speed">運転再生速度
+          <select id="depot-speed"><option value="1">1倍速</option><option value="5" selected>5倍速</option><option value="10">10倍速</option><option value="30">30倍速</option></select>
+        </label>
         <p id="depot-status" class="depot-status" role="status" aria-live="polite"></p>
         <p id="depot-owned" class="fleet-notes"></p>
-        <p class="fleet-notes">※設定した両数×20mが留置有効長です（車止め側と出入口側に各10mの余長）。価格・所持金は未設定のため、購入登録のみです。1線に1編成まで。線路との接続は可能ですが、列車の入出庫運行は未実装です。</p>
+        <p class="fleet-notes">※留置有効長＝設定両数×20m。1線に1編成まで。接続線路上の駅まで出庫し、駅で折り返したら「入庫開始」で基地へ戻せます。種別で選んだ駅だけ停車します。価格・所持金と自動時刻表は未設定です。</p>
       </aside>
       <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
@@ -678,8 +719,21 @@
       const depotAngle = document.querySelector('#depot-angle');
       const depotAngleValue = document.querySelector('#depot-angle-value');
       const depotGuidance = document.querySelector('#depot-guidance');
+      const depotServiceSelect = document.querySelector('#depot-service');
+      const depotDispatchButton = document.querySelector('#depot-dispatch');
+      const depotReturnButton = document.querySelector('#depot-return');
+      const depotSpeedSelect = document.querySelector('#depot-speed');
       const fleetButton = document.querySelector('#fleet-tool');
       const routeButton = document.querySelector('#route-tool');
+      const serviceButton = document.querySelector('#service-tool');
+      const serviceManager = document.querySelector('#service-manager');
+      const serviceEditTarget = document.querySelector('#service-edit-target');
+      const serviceNameInput = document.querySelector('#service-name');
+      const serviceRouteSelect = document.querySelector('#service-route');
+      const serviceStopsElement = document.querySelector('#service-stops');
+      const serviceSaveButton = document.querySelector('#service-save');
+      const serviceStatus = document.querySelector('#service-status');
+      const serviceListElement = document.querySelector('#service-list');
       const routeManager = document.querySelector('#route-manager');
       const routeCloseButton = document.querySelector('#route-close');
       const routeEditTarget = document.querySelector('#route-edit-target');
@@ -853,6 +907,11 @@
       const trackSections = [];
       let vehicleRun = null;
       let vehicleFrameId = null;
+      let depotRun = null;
+      let depotFrameId = null;
+      const services = [];
+      let nextServiceId = 1;
+      let draftServiceStops = new Set();
       let nextTrackSectionId = 1;
       let availableTrackOrigins = [];
       let trackDestination = null;
@@ -940,6 +999,8 @@
             delete position.routeNumbers[route.id];
             renderStationRouteList();
             updateStationRouteChoice();
+            renderServiceStops();
+            renderServiceList();
             redrawPlaced();
             stationRouteStatus.textContent = `${route.name}への駅登録を解除しました`;
           });
@@ -972,6 +1033,8 @@
         renderStationRouteList();
         updateStationRouteChoice();
         renderRouteList();
+        renderServiceStops();
+        renderServiceList();
         redrawPlaced();
       }
 
@@ -1031,8 +1094,128 @@
           routeSaveButton.textContent = '路線の変更を保存';
         }
         renderRouteList();
+        updateServiceSelectors();
+        renderServiceList();
         renderStationRouteList();
         redrawPlaced();
+      }
+
+      function serviceById(id) { return services.find(service => service.id === Number(id)) || null; }
+
+      function serviceStations(routeId) {
+        return positions.filter(station => Number.isInteger(station.routeNumbers?.[routeId]))
+          .sort((a, b) => a.routeNumbers[routeId] - b.routeNumbers[routeId]);
+      }
+
+      function updateServiceSelectors() {
+        const previous = serviceRouteSelect.value;
+        serviceRouteSelect.replaceChildren(routeSelectOption('', '路線を選択'),
+          ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
+        serviceRouteSelect.value = routes.some(route => String(route.id) === previous) ? previous : '';
+        const prior = serviceEditTarget.value;
+        serviceEditTarget.replaceChildren(routeSelectOption('', '＋ 新しい種別'),
+          ...services.map(service => routeSelectOption(service.id,
+            `${routeById(service.routeId)?.name || '路線未設定'}・${service.name}`)));
+        serviceEditTarget.value = services.some(service => String(service.id) === prior) ? prior : '';
+        renderServiceStops();
+      }
+
+      function renderServiceStops() {
+        const route = routeById(serviceRouteSelect.value);
+        const stops = route ? serviceStations(route.id) : [];
+        const buttons = stops.map(station => {
+          const stopped = draftServiceStops.has(station.id);
+          const item = document.createElement('button');
+          item.type = 'button';
+          item.setAttribute('class', 'service-stop');
+          item.setAttribute('aria-pressed', String(stopped));
+          item.setAttribute('aria-label', `${station.name}：${stopped ? '停車' : '通過'}、タップで切替`);
+          const number = document.createElement('strong');
+          number.textContent = `${numberedStationLabel(route, station.routeNumbers[route.id])}　${stopped ? '● 停車' : '○ 通過'}`;
+          const name = document.createElement('span');
+          name.textContent = station.name;
+          item.append(number, name);
+          item.addEventListener('click', () => {
+            if (draftServiceStops.has(station.id)) draftServiceStops.delete(station.id);
+            else draftServiceStops.add(station.id);
+            renderServiceStops();
+          });
+          return item;
+        });
+        if (!buttons.length) {
+          const note = document.createElement('p');
+          note.setAttribute('class', 'route-manager-note');
+          note.textContent = route ? 'この路線にはまだ駅がありません。駅をタップし、路線と駅番号を登録してください。'
+            : '先に路線名を選択してください。';
+          buttons.push(note);
+        }
+        serviceStopsElement.replaceChildren(...buttons);
+      }
+
+      function renderServiceList() {
+        const items = services.map(service => {
+          const item = document.createElement('div');
+          item.setAttribute('class', 'route-list-item');
+          const badge = document.createElement('span');
+          badge.setAttribute('class', 'route-symbol');
+          badge.style?.setProperty?.('background', routeById(service.routeId)?.color || '#587b9c');
+          badge.textContent = service.name.slice(0, 4);
+          const details = document.createElement('div');
+          const title = document.createElement('strong');
+          title.textContent = `${routeById(service.routeId)?.name || '不明な路線'} ・ ${service.name}`;
+          const description = document.createElement('small');
+          const members = serviceStations(service.routeId);
+          description.textContent = members.map(station => `${station.name} ${service.stopIds.includes(station.id) ? '●' : '○'}`).join(' → ');
+          details.append(title, description);
+          item.append(badge, details);
+          return item;
+        });
+        if (!items.length) {
+          const note = document.createElement('p');
+          note.setAttribute('class', 'route-manager-note');
+          note.textContent = 'まだ種別がありません。普通・急行などの種別と停車駅を登録してください。';
+          items.push(note);
+        }
+        serviceListElement.replaceChildren(...items);
+      }
+
+      function fillServiceForm() {
+        const service = serviceById(serviceEditTarget.value);
+        serviceNameInput.value = service?.name || '';
+        serviceRouteSelect.value = service ? String(service.routeId) : '';
+        draftServiceStops = new Set(service?.stopIds || []);
+        serviceSaveButton.textContent = service ? '種別の変更を保存' : 'この種別を作成';
+        serviceStatus.textContent = '';
+        serviceStatus.classList.toggle('invalid', false);
+        renderServiceStops();
+      }
+
+      function saveService() {
+        const existing = serviceById(serviceEditTarget.value);
+        const route = routeById(serviceRouteSelect.value);
+        const name = serviceNameInput.value.trim();
+        const stationIds = serviceStations(route?.id);
+        const stopIds = stationIds.filter(station => draftServiceStops.has(station.id)).map(station => station.id);
+        const error = !name ? '種別名を入力してください' : !route ? '路線を選択してください'
+          : !stationIds.length ? '先に路線に駅を登録してください'
+            : !stopIds.length ? '停車駅を1駅以上選んでください'
+              : services.some(item => item.id !== existing?.id && item.routeId === route.id && item.name === name)
+                ? 'この路線には同じ名前の種別があります' : '';
+        serviceStatus.textContent = error || `${route.name}の${name}を${existing ? '更新' : '作成'}しました（${stopIds.length}駅停車）`;
+        serviceStatus.classList.toggle('invalid', !!error);
+        if (error) return;
+        if (existing) Object.assign(existing, { name, routeId: route.id, stopIds });
+        else services.push({ id: nextServiceId++, name, routeId: route.id, stopIds });
+        updateServiceSelectors();
+        if (!existing) serviceEditTarget.value = String(services.at(-1).id);
+        serviceSaveButton.textContent = '種別の変更を保存';
+        renderServiceList();
+        updateDepotPanel();
+      }
+
+      function closeServiceManager() {
+        serviceManager.hidden = true;
+        serviceButton.setAttribute('aria-expanded', 'false');
       }
 
       function closeRouteManager() {
@@ -2106,19 +2289,26 @@
       }
 
       function renderVehicleTrain() {
-        if (!vehicleRun || !isOnCurrentLevel(vehicleRun.section)) {
+        const run = depotRun && isOnCurrentLevel(depotRun.depot) ? depotRun : null;
+        if (!run && (!vehicleRun || !isOnCurrentLevel(vehicleRun.section))) {
           trainLayer.replaceChildren();
           return;
         }
-        const { vehicle, route, frontMeters } = vehicleRun;
+        const vehicle = run ? run.vehicle : vehicleRun.vehicle;
+        const route = run ? run.route : vehicleRun.route;
+        const reverse = run?.phase === 'return';
+        const frontMeters = run
+          ? reverse ? run.destinationFront - vehicle.cars * CAR_LENGTH_METERS - run.frontMeters
+            : run.startFront + run.frontMeters
+          : vehicleRun.frontMeters;
         const cars = [];
         for (let index = vehicle.cars - 1; index >= 0; index--) {
-          const centerDistance = frontMeters - (index + .5) * CAR_LENGTH_METERS;
+          const centerDistance = frontMeters + (reverse ? 1 : -1) * (index + .5) * CAR_LENGTH_METERS;
           const center = vehiclePointAt(route, centerDistance);
           const car = document.createElementNS(SVG_NS, 'g');
           car.setAttribute('class', 'rolling-stock-car');
           car.setAttribute('data-car-number', String(index + 1));
-          car.setAttribute('transform', `translate(${center.x} ${center.y}) rotate(${center.heading})`);
+          car.setAttribute('transform', `translate(${center.x} ${center.y}) rotate(${normalDegrees(center.heading + (reverse ? 180 : 0))})`);
           const width = CAR_LENGTH_METERS * route.scale - 1 * route.scale;
           const height = (mapMode === 'blank' ? 7 : 2.8 * route.scale);
           const unit = mapMode === 'blank' ? height / 2.8 : route.scale;
@@ -2136,6 +2326,218 @@
           cars.push(car);
         }
         trainLayer.replaceChildren(...cars);
+      }
+
+      // 駅の両端・線路終端・頭端式基地の出入口をグラフにして、つながった軌道だけを走る。
+      function railNodeKey(endpoint) {
+        if (!endpoint) return '';
+        if (endpoint.type === 'depot') return `depot:${endpoint.depotId}`;
+        if (endpoint.type === 'station') return `station:${endpoint.stationId}:${endpoint.side}`;
+        if (endpoint.type === 'section') return `section:${endpoint.sectionId}`;
+        return '';
+      }
+
+      function reversedRailPoints(points, totalMeters) {
+        return [...points].reverse().map(point => ({ ...point, distance: totalMeters - point.distance,
+          heading: normalDegrees(point.heading + 180) }));
+      }
+
+      function buildDepotJourney(depot, service = null) {
+        const vehicle = ROLLING_STOCK[depot.vehicleId];
+        if (!vehicle || !isOnCurrentLevel(depot)) return { error: '基地と同じ階層の購入編成を選択してください。' };
+        const geometry = currentTrackGeometry();
+        const adjacency = new Map();
+        const addEdge = (from, to, points, lengthMeters, stationId = null, routeId = null) => {
+          if (!from || !to || !points?.length || lengthMeters <= 0) return;
+          const forward = { from, to, points, lengthMeters, stationId, routeId };
+          const backwards = { from: to, to: from, points: reversedRailPoints(points, lengthMeters),
+            lengthMeters, stationId, routeId };
+          if (!adjacency.has(from)) adjacency.set(from, []);
+          if (!adjacency.has(to)) adjacency.set(to, []);
+          adjacency.get(from).push(forward);
+          adjacency.get(to).push(backwards);
+        };
+        for (const section of trackSections.filter(isOnCurrentLevel)) {
+          const shape = geometry.get(section.id);
+          if (!shape) continue;
+          const length = shape.points.at(-1).distance;
+          addEdge(railNodeKey(section.source), railNodeKey(section.targetStation || { type: 'section', sectionId: section.id }),
+            shape.points.map(point => ({ ...point, spacing: trackSpacingAt(shape, point.distance) })),
+            length, null, section.routeId);
+        }
+        for (const station of positions.filter(isOnCurrentLevel)) {
+          const a = resolveTrackOrigin({ type: 'station', stationId: station.id, side: -1 }, geometry);
+          const b = resolveTrackOrigin({ type: 'station', stationId: station.id, side: 1 }, geometry);
+          if (!a || !b) continue;
+          const length = station.carCount * CAR_LENGTH_METERS + 40;
+          const inwardHeading = normalDegrees(a.heading + 180);
+          const points = [];
+          const segments = Math.max(2, Math.ceil(length / TRACK_SAMPLE_METERS));
+          for (let index = 0; index <= segments; index++) {
+            const t = index / segments;
+            points.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t,
+              heading: inwardHeading, spacing: a.spacing, distance: length * t });
+          }
+          addEdge(`station:${station.id}:-1`, `station:${station.id}:1`, points, length, station.id);
+        }
+        const mouth = resolveTrackOrigin({ type: 'depot', depotId: depot.id }, geometry);
+        const depotWidth = depot.carCount * CAR_LENGTH_METERS + 2 * DEPOT_END_BUFFER_METERS;
+        if (!mouth || !adjacency.has(`depot:${depot.id}`)) return { error: '出庫できません。先に基地の出入口を駅につながる線路へ接続してください。' };
+        const radians = mouth.heading * Math.PI / 180;
+        const points = [{ x: mouth.x - Math.cos(radians) * depotWidth * mouth.scale,
+          y: mouth.y - Math.sin(radians) * depotWidth * mouth.scale, heading: mouth.heading, spacing: 0, distance: 0 },
+        { x: mouth.x, y: mouth.y, heading: mouth.heading, spacing: 0, distance: depotWidth }];
+        const visited = new Set();
+        const stations = [];
+        let current = `depot:${depot.id}`;
+        let totalMeters = depotWidth;
+        for (let hops = 0; hops < 120; hops++) {
+          const available = (adjacency.get(current) || []).filter(edge => !visited.has([edge.from, edge.to].sort().join('|')));
+          if (!available.length) break;
+          available.sort((a, b) => Number(b.routeId === service?.routeId) - Number(a.routeId === service?.routeId));
+          const edge = available[0];
+          visited.add([edge.from, edge.to].sort().join('|'));
+          for (const point of edge.points.slice(1)) points.push({ ...point, distance: totalMeters + point.distance });
+          if (edge.stationId) stations.push({ stationId: edge.stationId, center: totalMeters + edge.lengthMeters / 2 });
+          totalMeters += edge.lengthMeters;
+          current = edge.to;
+          if (current.startsWith('depot:')) break;
+        }
+        const startFront = (depotWidth + vehicle.cars * CAR_LENGTH_METERS) / 2;
+        const reachable = stations.filter(stop => {
+          const station = positions.find(item => item.id === stop.stationId);
+          return station?.carCount >= vehicle.cars && stop.center + vehicle.cars * 10 <= totalMeters;
+        });
+        if (!reachable.length) return { error: `${vehicle.cars}両以上のホームを持つ駅まで、基地から線路を接続してください。` };
+        const requestedStops = service?.stopIds || [];
+        if (requestedStops.some(id => !reachable.some(stop => stop.stationId === id))) {
+          return { error: '種別の停車駅に未接続の駅、または編成より短いホームがあります。線路とホーム長を確認してください。' };
+        }
+        const destination = service
+          ? reachable.filter(stop => requestedStops.includes(stop.stationId)).at(-1)
+          : reachable.at(-1);
+        if (!destination) return { error: 'この種別の停車駅が見つかりません。' };
+        const destinationFront = destination.center + vehicle.cars * CAR_LENGTH_METERS / 2;
+        if (destinationFront <= startFront + 20) return { error: '出庫経路が短すぎます。' };
+        const outwardStops = reachable.filter(stop => stop.center <= destination.center + .1 &&
+          (!service || requestedStops.includes(stop.stationId)))
+          .map(stop => ({ stationId: stop.stationId,
+            name: positions.find(station => station.id === stop.stationId)?.name || '駅',
+            meters: stop.center + vehicle.cars * CAR_LENGTH_METERS / 2 - startFront }));
+        return { route: { points, totalMeters, scale: mouth.scale }, startFront,
+          destinationFront, outwardStops, depot, vehicle };
+      }
+
+      function updateDepotRunControls(message = '') {
+        const depot = selectedDepot();
+        if (!depot) return;
+        const run = depotRun?.depot.id === depot.id ? depotRun : null;
+        depotDispatchButton.disabled = !depot.vehicleId || !depotHasRailConnection(depot.id) || !!depotRun || !!vehicleRun;
+        depotReturnButton.disabled = !run || run.phase !== 'waiting';
+        depotServiceSelect.disabled = !depot.vehicleId || !!run;
+        if (message) depotStatus.textContent = message;
+      }
+
+      function updateDepotRunStatus(run, text) {
+        const speed = (run.speedMps * 3.6).toFixed(1);
+        const service = serviceById(run.depot.serviceId);
+        const info = `${run.vehicle.name} 第${run.depot.unitId}編成／${service?.name || '回送'}／${text}／${speed}km/h`;
+        if (selectedDepotId === run.depot.id) depotStatus.textContent = info;
+        trainHud.textContent = info;
+        trainHud.hidden = false;
+      }
+
+      function startDepotRun() {
+        const depot = selectedDepot();
+        if (!depot || depotRun || vehicleRun) return;
+        const service = serviceById(depot.serviceId);
+        const plan = buildDepotJourney(depot, service);
+        if (plan.error) { depotStatus.textContent = plan.error; return; }
+        depotRun = { ...plan, phase: 'outbound', frontMeters: 0, speedMps: 0, elapsedSeconds: 0,
+          maxObservedKmh: 0, emergency: false, finished: false, previousFrame: null,
+          remainingStops: [...plan.outwardStops], dwellSeconds: 0 };
+        redrawPlaced();
+        updateDepotRunStatus(depotRun, '出庫中');
+        updateDepotRunControls();
+        depotFrameId = requestAnimationFrame(animateDepotRun);
+      }
+
+      function beginDepotReturn() {
+        const run = depotRun;
+        if (!run || run.phase !== 'waiting') return;
+        run.phase = 'return';
+        run.frontMeters = 0;
+        run.speedMps = 0;
+        run.finished = false;
+        run.previousFrame = null;
+        run.remainingStops = [...run.outwardStops.slice(0, -1)].reverse().map(stop => ({ ...stop,
+          meters: run.destinationFront - run.startFront - stop.meters }));
+        run.remainingStops.push({ name: `車両基地${run.depot.id}`, depot: true,
+          meters: run.destinationFront - run.startFront });
+        updateDepotRunControls();
+        updateDepotRunStatus(run, '入庫運転中');
+        depotFrameId = requestAnimationFrame(animateDepotRun);
+      }
+
+      function cancelDepotRun() {
+        if (!depotRun) return;
+        if (depotFrameId !== null) cancelAnimationFrame(depotFrameId);
+        depotFrameId = null;
+        depotRun = null;
+        trainHud.hidden = true;
+        updateDepotPanel('表示条件が変わったため運転を中止し、編成を基地へ戻しました。');
+      }
+
+      function animateDepotRun(timestamp) {
+        depotFrameId = null;
+        const run = depotRun;
+        if (!run || run.phase === 'waiting') return;
+        if (run.previousFrame !== null) {
+          const elapsed = Math.min(.25, Math.max(0, (timestamp - run.previousFrame) / 1000));
+          let simulated = elapsed * (Number(depotSpeedSelect.value) || 1);
+          if (run.dwellSeconds > 0) {
+            const dwell = Math.min(simulated, run.dwellSeconds);
+            run.dwellSeconds -= dwell;
+            simulated -= dwell;
+          }
+          if (run.dwellSeconds <= 0 && run.remainingStops.length) {
+            const next = run.remainingStops[0];
+            while (simulated > 0 && !run.finished) {
+              const dt = Math.min(simulated, 2);
+              advanceVehicle(run.vehicle, run, dt, next.meters);
+              simulated -= dt;
+            }
+            if (run.finished) {
+              run.frontMeters = next.meters;
+              run.remainingStops.shift();
+              run.speedMps = 0;
+              if (next.depot) {
+                const depotId = run.depot.id;
+                depotRun = null;
+                redrawPlaced();
+                trainHud.hidden = !vehicleRun;
+                updateDepotPanel(`第${run.depot.unitId}編成が車両基地${depotId}へ入庫しました。`);
+                hint.textContent = `車両基地${depotId}への入庫が完了しました`;
+                return;
+              }
+              if (!run.remainingStops.length && run.phase === 'outbound') {
+                run.phase = 'waiting';
+                updateDepotRunControls();
+                updateDepotRunStatus(run, `${next.name}に到着・折返し待機（「入庫開始」を押してください）`);
+              } else {
+                run.finished = false;
+                run.dwellSeconds = 8;
+                updateDepotRunStatus(run, `${next.name}停車中`);
+              }
+            }
+          }
+        }
+        run.previousFrame = timestamp;
+        renderVehicleTrain();
+        if (run.phase !== 'waiting') {
+          if (!run.dwellSeconds) updateDepotRunStatus(run, run.phase === 'return' ? '入庫運転中' : '出庫運転中');
+          depotFrameId = requestAnimationFrame(animateDepotRun);
+        }
       }
 
       function currentAcceleration(vehicle, speedMps) {
@@ -2211,6 +2613,7 @@
       }
 
       function startVehicleRun() {
+        if (depotRun) { vehicleStatus.textContent = '出入庫中の編成があります。基地へ戻してから試運転を開始してください。'; return; }
         const vehicle = selectedVehicle();
         const section = trackSections.find(item => item.id === Number(vehicleRouteSelect.value) && isOnCurrentLevel(item));
         if (!section) { vehicleStatus.textContent = 'この階層には試運転可能な複線がありません。'; return; }
@@ -2505,7 +2908,7 @@
         buffer.setAttribute('y1', String(-5 * meters));
         buffer.setAttribute('y2', String(5 * meters));
         diagram.append(buffer);
-        const stock = ROLLING_STOCK[depot?.vehicleId];
+        const stock = depotRun?.depot.id === depot?.id ? null : ROLLING_STOCK[depot?.vehicleId];
         if (stock) {
           for (let carIndex = 0; carIndex < stock.cars; carIndex++) {
             const carX = (-stock.cars * 10 + carIndex * CAR_LENGTH_METERS + .5) * meters;
@@ -2605,8 +3008,15 @@
         depotBuyButton.disabled = !!stock || !!tooLong;
         depotVehicleSelect.disabled = !!stock;
         if (stock) depotVehicleSelect.value = stock.id;
+        depotServiceSelect.replaceChildren(routeSelectOption('', '回送（種別なし）'),
+          ...services.map(service => routeSelectOption(service.id,
+            `${routeById(service.routeId)?.name || '路線'}・${service.name}`)));
+        depotServiceSelect.value = serviceById(depot.serviceId) ? String(depot.serviceId) : '';
         depotStatus.textContent = message || (stock ? 'この基地は満線です。別の基地に購入してください。'
           : tooLong ? `${proposed.cars}両編成は${depot.carCount}両対応の留置線に収容できません。` : '形式を選んで「購入」を押してください。');
+        if (depotRun?.depot.id === depot.id && !message) updateDepotRunStatus(depotRun,
+          depotRun.phase === 'waiting' ? '折返し待機（入庫開始できます）' : depotRun.phase === 'return' ? '入庫運転中' : '出庫運転中');
+        updateDepotRunControls();
         const counts = Object.values(ROLLING_STOCK).map(model =>
           `${model.name}：${depots.filter(item => item.vehicleId === model.id).length}編成`);
         depotOwned.textContent = `保有編成：${counts.join(' ／ ')}`;
@@ -2614,6 +3024,7 @@
 
       function selectDepot(id) {
         closeRouteManager();
+        closeServiceManager();
         selectedDepotId = id;
         selectedStationId = null;
         fleetPanel.hidden = true;
@@ -3091,6 +3502,7 @@
 
       function fitCanvas() {
         if (vehicleRun) stopVehicleRun(false);
+        if (depotRun) cancelDepotRun();
         const bounds = svg.getBoundingClientRect();
         if (!bounds.width || !bounds.height) return;
         // スマートフォン縦画面でも、ホームを画面幅いっぱいに近い大きさで表示する。
@@ -3144,6 +3556,7 @@
       button.addEventListener('click', () => {
         setSettingsOpen(false);
         closeRouteManager();
+        closeServiceManager();
         closeDepotPanel();
         fleetPanel.hidden = true;
         fleetButton.setAttribute('aria-expanded', 'false');
@@ -3170,6 +3583,7 @@
       trackButton.addEventListener('click', () => {
         setSettingsOpen(false);
         closeRouteManager();
+        closeServiceManager();
         closeDepotPanel();
         fleetPanel.hidden = true;
         fleetButton.setAttribute('aria-expanded', 'false');
@@ -3199,6 +3613,7 @@
       depotButton.addEventListener('click', () => {
         setSettingsOpen(false);
         closeRouteManager();
+        closeServiceManager();
         const next = !placingDepot;
         closeDepotPanel();
         fleetPanel.hidden = true;
@@ -3226,6 +3641,16 @@
 
       document.querySelector('#depot-close').addEventListener('click', closeDepotPanel);
       depotBuyButton.addEventListener('click', purchaseDepotVehicle);
+      depotServiceSelect.addEventListener('change', () => {
+        const depot = selectedDepot();
+        if (!depot?.vehicleId || depotRun?.depot.id === depot.id) return;
+        depot.serviceId = serviceById(depotServiceSelect.value)?.id || null;
+        updateDepotPanel(depot.serviceId
+          ? `第${depot.unitId}編成に「${serviceById(depot.serviceId).name}」を設定しました。`
+          : `第${depot.unitId}編成を回送扱いにしました。`);
+      });
+      depotDispatchButton.addEventListener('click', startDepotRun);
+      depotReturnButton.addEventListener('click', beginDepotReturn);
       depotVehicleSelect.addEventListener('change', () => updateDepotPanel());
       depotAngle.addEventListener('input', () => setDepotRotation(Number(depotAngle.value)));
 
@@ -3239,6 +3664,7 @@
       fleetButton.addEventListener('click', () => {
         setSettingsOpen(false);
         closeRouteManager();
+        closeServiceManager();
         closeDepotPanel();
         const opening = fleetPanel.hidden;
         fleetPanel.hidden = !opening;
@@ -3264,6 +3690,7 @@
       });
       routeButton.addEventListener('click', () => {
         setSettingsOpen(false);
+        closeServiceManager();
         const opening = routeManager.hidden;
         if (!opening) { closeRouteManager(); return; }
         closeDepotPanel();
@@ -3294,6 +3721,43 @@
       routeEditTarget.addEventListener('change', fillRouteForm);
       routeCodeInput.addEventListener('input', () => { routeCodeInput.value = routeCodeInput.value.toUpperCase(); });
       routeSaveButton.addEventListener('click', saveRoute);
+      serviceButton.addEventListener('click', () => {
+        setSettingsOpen(false);
+        const opening = serviceManager.hidden;
+        if (!opening) { closeServiceManager(); return; }
+        closeRouteManager();
+        closeDepotPanel();
+        fleetPanel.hidden = true;
+        fleetButton.setAttribute('aria-expanded', 'false');
+        placing = false;
+        placingDepot = false;
+        layingTrack = false;
+        trackEditor.hidden = true;
+        trackDestination = null;
+        trackTargetStation = null;
+        trackPreview.replaceChildren();
+        connectionDialog.hidden = true;
+        button.setAttribute('aria-pressed', 'false');
+        trackButton.setAttribute('aria-pressed', 'false');
+        depotButton.setAttribute('aria-pressed', 'false');
+        svg.classList.toggle('placing', false);
+        svg.classList.toggle('placing-depot', false);
+        svg.classList.toggle('laying-track', false);
+        preview.setAttribute('visibility', 'hidden');
+        selectStation(null);
+        redrawPlaced();
+        serviceManager.hidden = false;
+        serviceButton.setAttribute('aria-expanded', 'true');
+        updateServiceSelectors();
+        renderServiceList();
+      });
+      document.querySelector('#service-close').addEventListener('click', closeServiceManager);
+      serviceEditTarget.addEventListener('change', fillServiceForm);
+      serviceRouteSelect.addEventListener('change', () => {
+        draftServiceStops = new Set(serviceStations(Number(serviceRouteSelect.value)).map(station => station.id));
+        renderServiceStops();
+      });
+      serviceSaveButton.addEventListener('click', saveService);
       stationRouteSelect.addEventListener('change', () => {
         stationRouteStatus.textContent = '';
         stationRouteStatus.classList.toggle('invalid', false);
@@ -3671,6 +4135,8 @@
       window.addEventListener('resize', fitCanvas);
       updateRouteSelectors();
       renderRouteList();
+      updateServiceSelectors();
+      renderServiceList();
       updateActiveConfig();
       fitCanvas();
       renderVehicleCatalog();

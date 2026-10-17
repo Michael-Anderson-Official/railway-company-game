@@ -44,9 +44,9 @@ class Element {
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
   '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
-  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance',
+  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance', '#depot-service', '#depot-dispatch', '#depot-return', '#depot-speed',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
-  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list',
+  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
@@ -74,7 +74,7 @@ const windowMock = new Element();
 const frameCallbacks = new Map();
 let frameSequence = 1;
 const scriptWithHooks = script.replace('      loadPopulationData();',
-  '      window.vehicleTestHooks = { ROLLING_STOCK, currentAcceleration, advanceVehicle };\n      loadPopulationData();');
+  '      window.vehicleTestHooks = { ROLLING_STOCK, currentAcceleration, advanceVehicle, positions, depots, services, buildDepotJourney, selectDepot, depotRun: () => depotRun };\n      loadPopulationData();');
 vm.runInNewContext(scriptWithHooks, {
   document: { querySelector: key => nodes[key], createElement: name => new Element(name), createElementNS: () => new Element() },
   window: windowMock, Math, Map,
@@ -763,4 +763,64 @@ assert.equal(routes().length, 1);
 assert.ok(endpointGap(routes()[0]) < 1e-7, 'origin depot throat has one rail');
 checkCrossovers(routes()[0], ['destination']);
 
-console.log('Tracks, platform numbering, route management, trains, one-sided head-end depot connection, mobile move/rotation and lock OK');
+// Timetabled train types belong to a line and independently toggle every registered stopping point.
+const model = windowMock.vehicleTestHooks;
+const b2Station = model.positions.find(station => station.id === Number(nodes['#placed'].children[0].attributes['data-station-id']));
+const b2Depot = model.depots.find(depot => depot.id === Number(originDepotId));
+b2Station.carCount = 6;
+b2Station.routeNumbers ||= {};
+b2Station.routeNumbers[1] = 3;
+b2Depot.carCount = 6;
+nodes['#service-tool'].dispatch('click');
+assert.equal(nodes['#service-manager'].hidden, false, 'service tab opens');
+nodes['#service-name'].value = '急行';
+nodes['#service-route'].value = '1';
+nodes['#service-route'].dispatch('change');
+assert.equal(nodes['#service-stops'].children.length, 3, 'selected line lists three numbered stations');
+assert.equal(nodes['#service-stops'].children.filter(node => node.attributes['aria-pressed'] === 'true').length, 3);
+nodes['#service-save'].dispatch('click');
+assert.equal(model.services.length, 1, 'one named service is created');
+assert.equal(model.services[0].stopIds.length, 3, 'all listed stations stop by default');
+nodes['#service-edit-target'].value = '1';
+nodes['#service-edit-target'].dispatch('change');
+nodes['#service-stops'].children[0].dispatch('click');
+nodes['#service-stops'].children[1].dispatch('click');
+assert.equal(nodes['#service-stops'].children.filter(node => node.attributes['aria-pressed'] === 'true').length, 1);
+nodes['#service-save'].dispatch('click');
+assert.equal(model.services[0].stopIds.length, 1, 'editing a service stores its stop pattern');
+assert.equal(model.services[0].stopIds[0], b2Station.id);
+nodes['#service-close'].dispatch('click');
+
+// An actual purchased consist leaves the single-track depot, stops at its route station,
+// waits for a manual return instruction, and comes home without deleting the purchase.
+model.selectDepot(b2Depot.id);
+nodes['#depot-vehicle'].value = 'meitetsu2200';
+nodes['#depot-vehicle'].dispatch('change');
+nodes['#depot-buy'].dispatch('click');
+assert.equal(b2Depot.vehicleId, 'meitetsu2200');
+nodes['#depot-service'].value = '1';
+nodes['#depot-service'].dispatch('change');
+assert.equal(b2Depot.serviceId, 1, 'purchased set keeps its assigned train type');
+const plan = model.buildDepotJourney(b2Depot, model.services[0]);
+assert.ok(plan.route?.points?.length > 2, plan.error || 'depot-to-station geometry exists');
+assert.equal(plan.outwardStops.length, 1);
+nodes['#depot-speed'].value = '30';
+nodes['#depot-dispatch'].dispatch('click');
+assert.ok(model.depotRun(), nodes['#depot-status'].textContent);
+assert.equal(nodes['#depot-dispatch'].disabled, true, 'a second departure is impossible during operation');
+assert.equal(nodes['#train-layer'].children.length, 6, 'outbound consist uses six animated car bodies');
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 0,
+  'stationary duplicate is hidden while its unit travels');
+advanceFrames(1500);
+assert.equal(nodes['#depot-return'].disabled, false, `train arrived and awaits return: ${nodes['#depot-status'].textContent}`);
+assert.match(nodes['#depot-status'].textContent, /折返し待機/);
+nodes['#depot-return'].dispatch('click');
+assert.equal(nodes['#depot-return'].disabled, true, 'return instruction is single use');
+advanceFrames(1500);
+assert.equal(model.depotRun(), null, `train has returned into storage: ${nodes['#depot-status'].textContent}`);
+assert.equal(b2Depot.vehicleId, 'meitetsu2200', 'arrival preserves owned vehicle');
+assert.match(nodes['#depot-status'].textContent, /入庫しました/);
+assert.equal(nodes['#depots'].children[0].children[0].children.filter(child => child.attributes['data-depot-car']).length, 6,
+  'parked stock reappears only after arrival');
+
+console.log('Tracks, route stops/type editing, purchased-unit depot departure and return, mobile depot move/rotation and lock OK');
