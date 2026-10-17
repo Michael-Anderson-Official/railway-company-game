@@ -44,9 +44,9 @@ class Element {
 const ids = [
   '#board', '#map-tiles', '#map-markers', '#catchment-rings', '#tracks', '#track-preview',
   '#placed', '#depots', '#station-endpoints', '#preview', '#place-tool', '#track-tool', '#depot-tool', '#tool-bar', '#settings-toggle', '#active-config', '#map-mode', '#map-focus-control', '#map-focus', '#floor-level', '#car-count',
-  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance', '#depot-service', '#depot-dispatch', '#depot-return', '#depot-speed',
+  '#depot-panel', '#depot-heading', '#depot-info', '#depot-vehicle', '#depot-buy', '#depot-status', '#depot-owned', '#depot-close', '#depot-angle', '#depot-angle-value', '#depot-guidance', '#depot-route', '#depot-service', '#depot-dispatch', '#depot-return', '#depot-speed',
   '#train-layer', '#fleet-tool', '#fleet-panel', '#fleet-close', '#vehicle-model', '#vehicle-route', '#vehicle-speed',
-  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#route-list', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
+  '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#auto-route-warnings', '#route-list', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
@@ -276,7 +276,7 @@ const stationTransform = nodes['#placed'].children[0].attributes.transform;
 const station = nodes['#placed'].children[0];
 const target = { closest: () => station, getAttribute: key => station.getAttribute(key) };
 board.dispatch('pointerdown', { pointerType: 'mouse', pointerId: 9, clientX: 200, clientY: 300, button: 0, target, preventDefault() {} });
-assert.equal(nodes['#station-angle'].disabled, true, 'connected stations are rotation-locked');
+assert.equal(nodes['#station-angle'].disabled, false, 'connected stations remain rotatable with automatic route recalculation');
 mouse('pointermove', 250, 330);
 mouse('pointerup', 250, 330);
 assert.equal(nodes['#placed'].children[0].attributes.transform, stationTransform);
@@ -797,15 +797,14 @@ tapTarget(Number(entranceMarker[1]), Number(entranceMarker[2]));
 assert.equal(nodes['#connection-dialog'].hidden, true, 'occupied depot throat is not connectable twice');
 assert.match(nodes['#track-validation'].textContent, /既に線路が接続/);
 nodes['#track-tool'].dispatch('click');
-// Track tool closes on construction, leaving the depot selectable with locked rotation and position.
+// Legacy manual-track scenario still leaves the depot selectable; automatic lines allow repositioning.
 const connectedDepotBody = nodes['#depots'].children[0].children[0].children.find(child => child.attributes.class === 'depot-hit');
 board.dispatch('pointerdown', { pointerType: 'mouse', pointerId: 411, clientX: 230, clientY: 530, button: 0, target: connectedDepotBody, preventDefault() {} });
 const connectedTransform = nodes['#depots'].children[0].attributes.transform;
-mouse('pointermove', 310, 550);
-mouse('pointerup', 310, 550);
-assert.equal(nodes['#depots'].children[0].attributes.transform, connectedTransform, 'connected depot cannot be dragged away');
-assert.equal(nodes['#depot-angle'].disabled, true, 'connected depot rotation slider is locked');
-assert.match(nodes['#depot-guidance'].textContent, /線路接続済み/);
+mouse('pointerup', 230, 530);
+assert.equal(nodes['#depots'].children[0].attributes.transform, connectedTransform, 'tapping the depot without dragging leaves position unchanged');
+assert.equal(nodes['#depot-angle'].disabled, false, 'connected depot rotation slider remains usable');
+assert.match(nodes['#depot-guidance'].textContent, /接続路線を選択/);
 
 // A depot also works as a track origin, joining the station's upper end from below.
 nodes['#floor-level'].value = '-2';

@@ -48,6 +48,7 @@
       background: #fff; color: #203047; font: inherit; font-size: 12px;
       font-weight: 700; cursor: pointer; white-space: nowrap;
     }
+    .tool > button[hidden] { display: none; }
     .tool button[aria-pressed="true"] {
       color: #fff; background: #2d5aa7; border-color: #2d5aa7;
       box-shadow: 0 3px 9px #2d5aa71e;
@@ -322,7 +323,7 @@
         position: fixed; z-index: 7; bottom: calc(10px + env(safe-area-inset-bottom, 0px));
         left: 10px; right: 10px; width: auto; max-width: 540px;
         margin-inline: auto; display: grid;
-        grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 5px;
+        grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 5px;
         padding: 6px; border: 1px solid #183c5c; border-radius: 17px;
         background: #17324dec; box-shadow: 0 8px 28px #10294247;
         -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px);
@@ -397,7 +398,7 @@
           </svg>
           1面2線
         </button>
-        <button id="track-tool" type="button" aria-pressed="false">
+        <button id="track-tool" type="button" aria-pressed="false" hidden aria-hidden="true" tabindex="-1">
           <svg viewBox="0 0 66 38" fill="none" aria-hidden="true">
             <path d="M4 11C24 11 33 28 62 28M4 3C24 3 33 20 62 20" stroke="currentColor" stroke-width="2.8" stroke-linecap="round"/>
           </svg>
@@ -481,7 +482,7 @@
             <option value="16">16両・320m</option>
           </select>
         </div>
-        <span class="tool-hint">駅は縦向きに配置。複線をつなぐと駅端にX字渡り線を設置します</span>
+        <span class="tool-hint">路線を作成し、各駅に番号を付けると番号順に複線を自動敷設します</span>
         </div>
       </div>
     </header>
@@ -557,7 +558,7 @@
           <output id="station-angle-value" for="station-angle">90.0°</output>
         </div>
         <section class="station-route-editor" aria-label="駅の路線と駅ナンバリング">
-          <h3>所属路線・駅ナンバリング</h3>
+          <h3>所属路線・駅ナンバリング（複線を自動接続）</h3>
           <div class="station-route-fields">
             <label for="station-route">路線<select id="station-route" aria-label="駅に登録する路線"></select></label>
             <label for="station-route-number">駅番号<input id="station-route-number" type="number" min="1" max="99" step="1" inputmode="numeric" placeholder="01" aria-label="駅ナンバリングの番号"></label>
@@ -597,7 +598,8 @@
         </div>
         <p id="route-manager-status" class="route-manager-status" role="status" aria-live="polite"></p>
         <div id="route-list" class="route-list" aria-label="作成した路線一覧"></div>
-        <p class="route-manager-note">路線を作ったら駅をタップして、その路線の番号（1〜99）を設定できます。1駅を複数路線に登録できます。</p>
+        <p id="auto-route-warnings" class="route-manager-status invalid" role="status" aria-live="polite" hidden></p>
+        <p class="route-manager-note">駅に番号（1〜99）を付けると、同一路線・同じ階層の隣り合う番号の駅を複線で自動接続。線路の交差や急曲線がある場合は接続を保留し、駅の位置・角度を調整できます。</p>
       </aside>
       <aside class="service-manager" id="service-manager" aria-label="列車種別と停車駅の作成" hidden>
         <div class="route-manager-heading"><h2>種別・停車駅の設定</h2><button id="service-close" type="button" aria-label="種別設定を閉じる">×</button></div>
@@ -654,12 +656,15 @@
           <button id="depot-close" type="button" aria-label="車両基地を閉じる">×</button>
         </div>
         <p id="depot-info" class="depot-info">留置線1線・選択した両数の編成に対応</p>
-        <p class="depot-guidance" id="depot-guidance">車両基地をドラッグで移動・紫の↻で自由回転。線路は出入口1か所だけ接続できます。</p>
+        <p class="depot-guidance" id="depot-guidance">車両基地をドラッグで移動・紫の↻で自由回転。路線を選ぶと接続可能な駅端へ自動接続します。</p>
         <div class="editor-rotation">
           <label for="depot-angle">角度</label>
           <input id="depot-angle" type="range" min="0" max="359.9" step="0.1" value="90" aria-label="車両基地の回転角度">
           <output id="depot-angle-value" for="depot-angle">90.0°</output>
         </div>
+        <label class="depot-field" for="depot-route">接続する路線
+          <select id="depot-route" aria-label="車両基地を自動接続する路線"><option value="">路線を選択</option></select>
+        </label>
         <label class="fleet-field" for="depot-vehicle">購入する車両
           <select id="depot-vehicle" aria-label="車両基地で購入する車両">
             <option value="meitetsu2200">名鉄2200系・6両（120m）</option>
@@ -679,7 +684,7 @@
         </label>
         <p id="depot-status" class="depot-status" role="status" aria-live="polite"></p>
         <p id="depot-owned" class="fleet-notes"></p>
-        <p class="fleet-notes">※留置有効長＝設定両数×20m。1線に1編成まで。接続線路上の駅まで出庫し、駅で折り返したら「入庫開始」で基地へ戻せます。種別で選んだ駅だけ停車します。価格・所持金と自動時刻表は未設定です。</p>
+        <p class="fleet-notes">※留置有効長＝設定両数×20m。1線に1編成まで。接続路線を選ぶと同じ階層の空き駅端へ自動敷設。駅で折り返したら「入庫開始」で帰庫できます。価格・所持金と自動時刻表は未設定です。</p>
       </aside>
       <output id="train-hud" class="train-hud" aria-live="off" hidden></output>
       <div id="connection-dialog" class="connection-dialog" role="dialog" aria-modal="true" aria-labelledby="connection-question" hidden>
@@ -702,7 +707,7 @@
           </div>
         </div>
       </div>
-      <div id="hint" class="hint" role="status">「1面2線」を選んで配置できます</div>
+      <div id="hint" class="hint" role="status">駅を配置→「路線」で路線作成→駅番号を付けると複線が自動でつながります</div>
       <div id="map-credit" class="map-credit">地図：<a href="https://maps.gsi.go.jp/" target="_blank" rel="noopener noreferrer">国土地理院</a>／駅位置：<a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">© OpenStreetMap contributors</a></div>
     </section>
   </main>
@@ -734,6 +739,7 @@
       const depotAngle = document.querySelector('#depot-angle');
       const depotAngleValue = document.querySelector('#depot-angle-value');
       const depotGuidance = document.querySelector('#depot-guidance');
+      const depotRouteSelect = document.querySelector('#depot-route');
       const depotServiceSelect = document.querySelector('#depot-service');
       const depotDispatchButton = document.querySelector('#depot-dispatch');
       const depotReturnButton = document.querySelector('#depot-return');
@@ -756,6 +762,7 @@
       const routeCodeInput = document.querySelector('#route-code');
       const routeSaveButton = document.querySelector('#route-save');
       const routeManagerStatus = document.querySelector('#route-manager-status');
+      const autoRouteWarnings = document.querySelector('#auto-route-warnings');
       const routeList = document.querySelector('#route-list');
       const toolBar = document.querySelector('#tool-bar');
       const settingsToggle = document.querySelector('#settings-toggle');
@@ -921,6 +928,9 @@
       let depotDragStart = null;
       let depotRotationDragStart = null;
       const trackSections = [];
+      const automaticTrackIds = new Map();
+      let automaticTracksDirty = true;
+      let automaticTrackWarnings = [];
       let vehicleRun = null;
       let vehicleFrameId = null;
       let depotRun = null;
@@ -992,6 +1002,10 @@
         stationRouteSelect.value = routes.some(route => String(route.id) === previousEditor) ? previousEditor : '';
         trackRouteSelect.replaceChildren(routeSelectOption('', '路線未設定'), ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
         trackRouteSelect.value = routes.some(route => String(route.id) === previousTrack) ? previousTrack : '';
+        const previousDepotRoute = depotRouteSelect.value;
+        depotRouteSelect.replaceChildren(routeSelectOption('', '路線を選択'),
+          ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
+        depotRouteSelect.value = routes.some(route => String(route.id) === previousDepotRoute) ? previousDepotRoute : '';
         const previousEditTarget = routeEditTarget.value;
         routeEditTarget.replaceChildren(routeSelectOption('', '＋ 新しい路線'), ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
         routeEditTarget.value = routes.some(route => String(route.id) === previousEditTarget) ? previousEditTarget : '';
@@ -1015,12 +1029,15 @@
           remove.textContent = '×';
           remove.addEventListener('click', () => {
             delete position.routeNumbers[route.id];
+            automaticTracksDirty = true;
             renderStationRouteList();
             updateStationRouteChoice();
             renderServiceStops();
             renderServiceList();
             redrawPlaced();
+            renderRouteList();
             stationRouteStatus.textContent = `${route.name}への駅登録を解除しました`;
+            if (automaticTrackWarnings.length) stationRouteStatus.textContent += `／${automaticTrackWarnings[0]}`;
           });
           chip.append(badge, name, remove);
           return chip;
@@ -1048,12 +1065,14 @@
         if (error) return;
         position.routeNumbers ||= {};
         position.routeNumbers[route.id] = number;
+        automaticTracksDirty = true;
         renderStationRouteList();
         updateStationRouteChoice();
         renderRouteList();
         renderServiceStops();
         renderServiceList();
         redrawPlaced();
+        if (automaticTrackWarnings.length) stationRouteStatus.textContent += `／${automaticTrackWarnings[0]}`;
       }
 
       function renderRouteList() {
@@ -1106,6 +1125,7 @@
         if (error) return;
         if (current) Object.assign(current, { name, code });
         else routes.push({ id: nextRouteId++, name, code, color: ROUTE_COLORS[routes.length % ROUTE_COLORS.length] });
+        automaticTracksDirty = true;
         updateRouteSelectors();
         if (!current) {
           routeEditTarget.value = String(routes[routes.length - 1].id);
@@ -1439,6 +1459,87 @@
         return trackSections.some(section =>
           (section.source.type === 'depot' && section.source.depotId === id) ||
           (section.targetStation?.type === 'depot' && section.targetStation.depotId === id));
+      }
+
+      // 路線番号の順番で「隣駅同士」だけを接続する。駅端は一度だけ使用し、
+      // 車両基地も選択路線の未使用駅端を探して接続する（頭端式の出入口は一か所）。
+      // 既存の曲線半径・構内侵入・線路交差チェックを通らない区間は作らない。
+      function rebuildAutomaticTracks() {
+        if (!automaticTracksDirty) return;
+        automaticTracksDirty = false;
+        if (vehicleRun) stopVehicleRun(false);
+        if (depotRun) cancelDepotRun();
+        const others = trackSections.filter(section => !section.automatic || !isOnCurrentLevel(section));
+        trackSections.splice(0, trackSections.length, ...others);
+        automaticTrackWarnings = [];
+        const occupied = new Set();
+        for (const section of trackSections.filter(isOnCurrentLevel)) {
+          occupied.add(trackOriginKey(section.source));
+          if (section.targetStation) occupied.add(trackOriginKey(section.targetStation));
+        }
+        const tryJoin = (source, destination) => {
+          if (occupied.has(trackOriginKey(source)) || occupied.has(trackOriginKey(destination))) return null;
+          const result = validateTrack(source, null, currentTrackGeometry(), destination);
+          return result.error ? null : { source, destination, lengthMeters: result.lengthMeters };
+        };
+        const addJoin = (key, routeId, chosen) => {
+          if (!automaticTrackIds.has(key)) automaticTrackIds.set(key, nextTrackSectionId++);
+          const source = { ...chosen.source };
+          const targetStation = { ...chosen.destination };
+          const stationCrossovers = [source.type === 'station' ? 'source' : null,
+            targetStation.type === 'station' ? 'destination' : null].filter(Boolean);
+          trackSections.push({ id: automaticTrackIds.get(key), autoKey: key, automatic: true,
+            mode: mapMode, level: currentLevel, routeId, source, targetStation,
+            crossoverEnds: stationCrossovers });
+          occupied.add(trackOriginKey(source));
+          occupied.add(trackOriginKey(targetStation));
+        };
+        for (const route of routes) {
+          const stations = serviceStations(route.id);
+          for (let index = 1; index < stations.length; index++) {
+            const from = stations[index - 1];
+            const to = stations[index];
+            if (!isOnCurrentLevel(from) && !isOnCurrentLevel(to)) continue;
+            const label = `${route.code}${String(from.routeNumbers[route.id]).padStart(2, '0')}→${route.code}${String(to.routeNumbers[route.id]).padStart(2, '0')}`;
+            if (!isOnCurrentLevel(from) || !isOnCurrentLevel(to)) {
+              automaticTrackWarnings.push(`${label}：地図・階層が異なるため未接続`);
+              continue;
+            }
+            const choices = [];
+            for (const firstSide of [-1, 1]) for (const lastSide of [-1, 1]) {
+              const choice = tryJoin({ type: 'station', stationId: from.id, side: firstSide },
+                { type: 'station', stationId: to.id, side: lastSide });
+              if (choice) choices.push(choice);
+            }
+            choices.sort((a, b) => a.lengthMeters - b.lengthMeters);
+            if (choices.length) addJoin(`route:${route.id}:${from.id}:${to.id}`, route.id, choices[0]);
+            else automaticTrackWarnings.push(`${label}：曲線半径・向き・交差または空き駅端の条件を満たしません。駅を移動／回転してください`);
+          }
+        }
+        for (const depot of depots.filter(isOnCurrentLevel)) {
+          const route = routeById(depot.routeId);
+          if (!route) continue;
+          const choices = [];
+          const linkedStations = serviceStations(route.id).filter(isOnCurrentLevel);
+          for (const station of linkedStations) {
+            for (const side of [-1, 1]) {
+              const endpoint = { type: 'station', stationId: station.id, side };
+              const mouth = { type: 'depot', depotId: depot.id };
+              const outward = tryJoin(mouth, endpoint);
+              const inward = tryJoin(endpoint, mouth);
+              if (outward) choices.push({ ...outward, station });
+              if (inward) choices.push({ ...inward, station });
+            }
+          }
+          choices.sort((a, b) => a.lengthMeters - b.lengthMeters);
+          if (choices.length) addJoin(`depot:${depot.id}`, route.id, choices[0]);
+          else automaticTrackWarnings.push(`車両基地${depot.id}：${route.name}の接続可能な空き駅端がありません。位置・角度・階層を確認してください`);
+        }
+        autoRouteWarnings.hidden = !automaticTrackWarnings.length;
+        autoRouteWarnings.textContent = automaticTrackWarnings.slice(0, 4).join('／') +
+          (automaticTrackWarnings.length > 4 ? `／ほか${automaticTrackWarnings.length - 4}件` : '');
+        updateVehicleRouteOptions();
+        renderRouteList();
       }
 
       function currentTrackGeometry() {
@@ -2235,7 +2336,7 @@
         vehicleRouteSelect.replaceChildren(...options);
         if (options.some(option => option.value === previous)) vehicleRouteSelect.value = previous;
         vehicleRunButton.disabled = !options.length || !!(vehicleRun && !vehicleRun.finished);
-        if (!options.length && !vehicleRun) vehicleStatus.textContent = '先に駅を配置し、そこから複線を敷設してください。';
+        if (!options.length && !vehicleRun) vehicleStatus.textContent = '路線を作成し、2駅以上に駅番号を付けると複線が自動接続されます。';
         if (options.length && !vehicleRun) vehicleStatus.textContent = '車両と複線を選び、試運転を開始できます。';
       }
 
@@ -3074,22 +3175,27 @@
         const proposed = ROLLING_STOCK[depotVehicleSelect.value];
         const tooLong = proposed && proposed.cars > depot.carCount;
         const connected = depotHasRailConnection(depot.id);
+        depotRouteSelect.replaceChildren(routeSelectOption('', '路線を選択'),
+          ...routes.map(route => routeSelectOption(route.id, `${route.name}（${route.code}）`)));
+        depotRouteSelect.value = routeById(depot.routeId) ? String(depot.routeId) : '';
         depotInfo.textContent = stock
           ? `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／${stock.name} ${stock.cars}両を留置中／車両番号 ${depot.unitId}`
           : `留置線1線・${depot.carCount}両対応（有効長${capacity}m）／空線：新規列車を購入できます`;
         depotAngle.value = String(depot.rotation ?? DEFAULT_STATION_ROTATION);
-        depotAngle.disabled = connected;
+        depotAngle.disabled = false;
         depotAngleValue.textContent = `${(depot.rotation ?? DEFAULT_STATION_ROTATION).toFixed(1)}°`;
-        depotGuidance.textContent = connected
-          ? '出入口は線路接続済み（片側1か所）。線路の破断を防ぐため移動・回転は固定しています。'
-          : '基地本体をドラッグで移動・紫の↻で自由回転。「複線」で出入口1か所だけに接続できます。';
+        const route = routeById(depot.routeId);
+        depotGuidance.textContent = !route
+          ? '接続路線を選択してください。基地を移動・回転して位置を調整できます。'
+          : connected ? `${route.name}に自動接続済み。移動・回転後も線路を再計算します。`
+            : `${route.name}への自動接続待ち。同じ階層の空き駅端に近づけ、基地の出入口の向きを合わせてください。`;
         depotBuyButton.disabled = !!stock || !!tooLong;
         depotVehicleSelect.disabled = !!stock;
         if (stock) depotVehicleSelect.value = stock.id;
         depotServiceSelect.replaceChildren(routeSelectOption('', '回送（種別なし）'),
-          ...services.map(service => routeSelectOption(service.id,
+          ...services.filter(service => service.routeId === depot.routeId).map(service => routeSelectOption(service.id,
             `${routeById(service.routeId)?.name || '路線'}・${service.name}`)));
-        depotServiceSelect.value = serviceById(depot.serviceId) ? String(depot.serviceId) : '';
+        depotServiceSelect.value = serviceById(depot.serviceId)?.routeId === depot.routeId ? String(depot.serviceId) : '';
         depotStatus.textContent = message || (stock ? 'この基地は満線です。別の基地に購入してください。'
           : tooLong ? `${proposed.cars}両編成は${depot.carCount}両対応の留置線に収容できません。` : '形式を選んで「購入」を押してください。');
         if (depotRun?.depot.id === depot.id && !message) updateDepotRunStatus(depotRun,
@@ -3140,22 +3246,12 @@
       function setDepotRotation(degrees) {
         const depot = selectedDepot();
         if (!depot) return;
-        if (depotHasRailConnection(depot.id)) {
-          hint.textContent = '線路接続済みの車両基地は回転できません';
-          updateDepotPanel();
-          return;
-        }
         depot.rotation = normalDegrees(degrees);
         redrawPlaced();
         updateDepotPanel();
       }
 
       function beginDepotRotationDrag(event, depot) {
-        if (depotHasRailConnection(depot.id)) {
-          selectDepot(depot.id);
-          hint.textContent = '線路接続済みの車両基地は位置・角度を固定しています';
-          return;
-        }
         const pointerAngle = depotAngleAtPointer(event, depot);
         if (pointerAngle === null) return;
         selectDepot(depot.id);
@@ -3177,14 +3273,10 @@
 
       function beginDepotDrag(event, depot) {
         selectDepot(depot.id);
-        if (depotHasRailConnection(depot.id)) {
-          hint.textContent = '線路接続済みの車両基地は移動できません。接続を保つため位置を固定しています';
-          return;
-        }
         depotDragStart = { id: depot.id, pointerId: event.pointerId, screenX: event.clientX,
           screenY: event.clientY, original: { ...depot } };
         svg.setPointerCapture(event.pointerId);
-        hint.textContent = '車両基地をドラッグして移動できます。出入口から線路を接続できます';
+        hint.textContent = '車両基地をドラッグして移動できます。離すと指定路線への線路を自動再計算します';
       }
 
       function dragDepot(event) {
@@ -3256,14 +3348,14 @@
         stationEditor.hidden = layingTrack || !position;
         if (!position) return;
         const connected = stationHasRailConnection(position.id);
-        stationInfo.textContent = `${floorLabel(position.level)}・1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）${connected ? '・線路接続済み（位置固定）' : ''}`;
+        stationInfo.textContent = `${floorLabel(position.level)}・1面2線・${position.carCount}両（${position.carCount * CAR_LENGTH_METERS}m）${connected ? '・複線自動接続済み' : ''}`;
         stationNameInput.value = position.name;
         stationInterchange.hidden = !position.interchange;
         stationInterchange.textContent = position.interchange
           ? `⇄ 乗換駅：${position.interchange.operator} ${position.interchange.name}駅（直線約${position.interchange.distanceMeters}m）`
           : '';
         stationAngle.value = String(position.rotation);
-        stationAngle.disabled = connected;
+        stationAngle.disabled = false;
         stationAngleValue.textContent = `${position.rotation.toFixed(1)}°`;
         renderStationRouteList();
         updateStationRouteChoice();
@@ -3322,10 +3414,6 @@
       }
 
       function beginRotationDrag(event, position) {
-        if (stationHasRailConnection(position.id)) {
-          hint.textContent = '線路接続済みの駅は回転できません。接続の破断を防ぐため位置を固定しています';
-          return;
-        }
         const pointerAngle = rotationAngleAtPointer(event, position);
         if (pointerAngle === null) return;
         selectStation(position.id);
@@ -3349,11 +3437,6 @@
       }
 
       function beginStationDrag(event, position) {
-        if (stationHasRailConnection(position.id)) {
-          selectStation(position.id);
-          hint.textContent = '線路接続済みの駅は移動できません。接続の破断を防ぐため位置を固定しています';
-          return;
-        }
         selectStation(position.id);
         stationDragStart = {
           id: position.id,
@@ -3393,11 +3476,6 @@
       function setRotation(degrees) {
         const position = selectedStation();
         if (!position) return;
-        if (stationHasRailConnection(position.id)) {
-          hint.textContent = '線路接続済みの駅は回転できません';
-          updateStationEditor();
-          return;
-        }
         position.rotation = ((degrees % 360) + 360) % 360;
         redrawPlaced();
         updateStationEditor();
@@ -3553,6 +3631,7 @@
       }
 
       function redrawPlaced() {
+        rebuildAutomaticTracks();
         renderTracks();
         placed.replaceChildren(...positions.filter(isOnCurrentLevel).map(position => {
           if (mapMode === 'kariya') {
@@ -3588,6 +3667,7 @@
         const width = Math.max(480, Math.round(bounds.width * 1.05));
         const height = Math.round(width * bounds.height / bounds.width);
         canvasSize = { width, height };
+        automaticTracksDirty = true;
         mapData.hidden = mapMode !== 'kariya';
         mapCredit.hidden = mapMode !== 'kariya';
         mapFocusControl.hidden = mapMode !== 'kariya';
@@ -3720,6 +3800,19 @@
 
       document.querySelector('#depot-close').addEventListener('click', closeDepotPanel);
       depotBuyButton.addEventListener('click', purchaseDepotVehicle);
+      depotRouteSelect.addEventListener('change', () => {
+        const depot = selectedDepot();
+        if (!depot || depotRun?.depot.id === depot.id) return;
+        depot.routeId = routeById(depotRouteSelect.value)?.id || null;
+        if (serviceById(depot.serviceId)?.routeId !== depot.routeId) depot.serviceId = null;
+        automaticTracksDirty = true;
+        redrawPlaced();
+        updateDepotPanel(depot.routeId
+          ? depotHasRailConnection(depot.id)
+            ? `${routeById(depot.routeId).name}へ自動接続しました。`
+            : automaticTrackWarnings.find(warning => warning.startsWith(`車両基地${depot.id}：`)) || '駅との接続を調整中です。'
+          : '路線の接続を解除しました。');
+      });
       depotServiceSelect.addEventListener('change', () => {
         const depot = selectedDepot();
         if (!depot?.vehicleId || depotRun?.depot.id === depot.id) return;
@@ -3732,6 +3825,11 @@
       depotReturnButton.addEventListener('click', beginDepotReturn);
       depotVehicleSelect.addEventListener('change', () => updateDepotPanel());
       depotAngle.addEventListener('input', () => setDepotRotation(Number(depotAngle.value)));
+      depotAngle.addEventListener('change', () => {
+        automaticTracksDirty = true;
+        redrawPlaced();
+        updateDepotPanel();
+      });
 
       trackOriginSelect.addEventListener('change', () => {
         suggestRouteForTrackOrigin();
@@ -3933,6 +4031,7 @@
         selectedDepotId = null;
         depotPanel.hidden = true;
         mapMode = modeSelect.value;
+        automaticTracksDirty = true;
         updateActiveConfig();
         selectedStationId = null;
         stationDragStart = null;
@@ -3982,6 +4081,7 @@
         selectedDepotId = null;
         depotPanel.hidden = true;
         currentLevel = Number(floorSelect.value);
+        automaticTracksDirty = true;
         updateTrainFollowButton();
         updateActiveConfig();
         selectedStationId = null;
@@ -4008,6 +4108,11 @@
       });
 
       stationAngle.addEventListener('input', () => setRotation(Number(stationAngle.value)));
+      stationAngle.addEventListener('change', () => {
+        automaticTracksDirty = true;
+        redrawPlaced();
+        updateStationEditor();
+      });
       stationNameInput.addEventListener('input', event => {
         if (!event.isComposing) updateStationName();
       });
@@ -4189,11 +4294,19 @@
           const tappedDestination = layingTrack && mousePanStart &&
             Math.hypot(event.clientX - mousePanStart.x, event.clientY - mousePanStart.y) <= TAP_SLOP;
           if (stationDragStart?.pointerId === event.pointerId) finishStationMove();
+          const movedFacility = [stationDragStart, rotationDragStart, depotDragStart, depotRotationDragStart]
+            .some(drag => drag?.pointerId === event.pointerId);
           stationDragStart = null;
           rotationDragStart = null;
           depotDragStart = null;
           depotRotationDragStart = null;
           mousePanStart = null;
+          if (movedFacility) {
+            automaticTracksDirty = true;
+            redrawPlaced();
+            updateStationEditor();
+            updateDepotPanel();
+          }
           if (tappedDestination) selectTrackDestination(event);
           return;
         }
@@ -4214,6 +4327,12 @@
         if (finishedRotationDrag) rotationDragStart = null;
         if (finishedDepotDrag) depotDragStart = null;
         if (finishedDepotRotation) depotRotationDragStart = null;
+        if (finishedStationDrag || finishedRotationDrag || finishedDepotDrag || finishedDepotRotation) {
+          automaticTracksDirty = true;
+          redrawPlaced();
+          updateStationEditor();
+          updateDepotPanel();
+        }
         pendingTouchPlacement = null;
         pendingDepotTap = null;
         pinchStart = null;
