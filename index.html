@@ -14,8 +14,9 @@
       -webkit-font-smoothing: antialiased;
     }
     * { box-sizing: border-box; }
+    html, body { touch-action: manipulation; }
     body { margin: 0; min-width: 320px; }
-    .app { display: flex; flex-direction: column; height: 100dvh; min-height: 400px; }
+    .app { display: flex; flex-direction: column; height: 100dvh; min-height: 400px; touch-action: manipulation; }
     .header {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       padding: 15px 24px; background: #fff; border-bottom: 1px solid #e6eaf0;
