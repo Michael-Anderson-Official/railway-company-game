@@ -107,36 +107,64 @@ tap(via.lon, via.lat, 'touch');
 assert.equal(section()?.id, initialId, 'automatic section ID remains stable');
 assert.equal(JSON.stringify(section().source), initialSource, 'original station exit preserved');
 assert.equal(JSON.stringify(section().targetStation), initialTarget, 'original station entrance preserved');
-assert.ok(section().waypoint, 'touch adds waypoint to automated line');
+assert.equal(section().waypoint.points.length, 1, 'touch adds first waypoint to automated line');
 assert.equal(state.trackWaypoints.get(key).level, -1, 'waypoint keeps floor');
+assert.equal(nodes['#waypoint-pick'].attributes['aria-pressed'], 'true', 'tap mode stays active after a waypoint');
 const rerouted = state.currentTrackGeometry().get(initialId);
 const exact = state.geoToCanvas(via.lon, via.lat);
 assert.ok(rerouted.points.some(point => Math.hypot(point.x - exact.x, point.y - exact.y) < 1e-6),
   'centerline exactly passes tapped waypoint');
 assert.ok(rerouted.lengthMeters > original.lengthMeters, 'detour increases length');
 assert.equal(nodes['#tracks'].children.length, 1, 'rerouted double tracks render');
-assert.equal(nodes['#waypoint-layer'].children.length, 1, 'waypoint marker renders');
+assert.ok(!html.includes('id="waypoint-layer"'), 'no waypoint overlay exists in the map');
+assert.ok(!html.includes('waypoint-marker'), 'no waypoint marker or caption is rendered');
 
-arm();
+const secondVia = { lon: 137.015, lat: 34.996 };
+tap(secondVia.lon, secondVia.lat, 'touch');
+assert.equal(section()?.waypoint?.points.length, 2, `second tap retains both waypoints: ${nodes['#waypoint-status'].textContent}`);
+const reroutedTwice = state.currentTrackGeometry().get(initialId);
+const secondExact = state.geoToCanvas(secondVia.lon, secondVia.lat);
+for (const desired of [exact, secondExact]) {
+  assert.ok(reroutedTwice.points.some(point => Math.hypot(point.x - desired.x, point.y - desired.y) < 1e-6),
+    'centerline passes through each selected point');
+}
+assert.equal(JSON.stringify(section().source), initialSource, 'multiple waypoints preserve original station exit');
+assert.equal(JSON.stringify(section().targetStation), initialTarget, 'multiple waypoints preserve original station entrance');
+const thirdVia = { lon: 137.0144, lat: 34.9945 };
+tap(thirdVia.lon, thirdVia.lat, 'touch');
+assert.equal(section()?.waypoint?.points.length, 3, `third nearby tap adds a point: ${nodes['#waypoint-status'].textContent}`);
+const thirdExact = state.geoToCanvas(thirdVia.lon, thirdVia.lat);
+assert.ok(state.currentTrackGeometry().get(initialId).points.some(point =>
+  Math.hypot(point.x - thirdExact.x, point.y - thirdExact.y) < 1e-6), 'third intermediate point is exact');
+
 const nearby = screenFor(137.013, 35.004);
 const gesture = { pointerId: 111, pointerType: 'touch', isPrimary: true, button: 0,
   clientX: nearby.x, clientY: nearby.y, target: nodes['#board'] };
 nodes['#board'].dispatch('pointerdown', gesture);
 nodes['#board'].dispatch('pointermove', { ...gesture, clientX: nearby.x + 50 });
 nodes['#board'].dispatch('pointerup', { ...gesture, clientX: nearby.x + 50 });
-assert.equal(state.trackWaypoints.get(key).lon, via.lon, 'swiping map does not change waypoint');
+assert.equal(state.trackWaypoints.get(key).points.length, 3, 'swiping map does not add waypoint');
 
 tap(137.012, 35.020, 'touch');
 assert.match(nodes['#waypoint-status'].textContent, /敷設できません：.*元の線路を維持しました/,
   'invalid point displays a reason and rollback confirmation');
-assert.equal(state.trackWaypoints.get(key).lon, via.lon, 'invalid point restores previous waypoint');
+assert.equal(state.trackWaypoints.get(key).points.length, 3, 'invalid point restores previous waypoints');
+for (const desired of [exact, secondExact, thirdExact]) {
+  assert.ok(state.currentTrackGeometry().get(initialId).points.some(point =>
+    Math.hypot(point.x - desired.x, point.y - desired.y) < 1e-6), 'failed rerouting preserves all existing bends');
+}
+
+nodes['#waypoint-undo'].dispatch('click');
+assert.equal(state.trackWaypoints.get(key)?.points.length, 2, 'undo removes third waypoint only');
+nodes['#waypoint-undo'].dispatch('click');
+assert.equal(state.trackWaypoints.get(key)?.points.length, 1, 'undo removes only last waypoint');
 assert.ok(state.currentTrackGeometry().get(initialId).points.some(point =>
-  Math.hypot(point.x - exact.x, point.y - exact.y) < 1e-6), 'failed rerouting preserves original track');
+  Math.hypot(point.x - exact.x, point.y - exact.y) < 1e-6), 'undo restores single bend');
 
 nodes['#waypoint-clear'].dispatch('click');
 assert.equal(state.trackWaypoints.has(key), false, 'clear removes waypoint');
 assert.equal(section()?.id, initialId);
 assert.equal(section().waypoint, undefined, 'clear restores standard automatic track');
-assert.equal(nodes['#waypoint-layer'].children.length, 0, 'marker disappears');
+assert.ok(!html.includes('id="waypoint-layer"'), 'clearing the detour needs no marker layer');
 
-console.log('Waypoint touch, exact route, station endpoints, drag, rollback and clear: PASS');
+console.log('Invisible multi-waypoint, touch, exact route, station endpoints, drag, rollback, undo and clear: PASS');
