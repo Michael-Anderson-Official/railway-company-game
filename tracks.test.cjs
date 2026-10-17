@@ -73,6 +73,10 @@ assert.match(html, /html, body\s*\{\s*touch-action:\s*manipulation;\s*\}/,
   'browser double-tap zoom must be disabled without disabling accessible pinch zoom');
 assert.match(html, /#board\s*\{[^}]*touch-action:\s*none;/,
   'board keeps custom two-finger map zoom');
+assert.match(html, /\.app\s*\{[^}]*-webkit-user-select:\s*none;[^}]*user-select:\s*none;/,
+  'interactive game UI does not offer iOS text-selection handles');
+assert.match(html, /\.app input, \.app textarea, \.app \[contenteditable="true"\]\s*\{[^}]*-webkit-user-select:\s*text;[^}]*user-select:\s*text;/,
+  'station names and other editable fields still support text selection');
 const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
 const windowMock = new Element();
 const frameCallbacks = new Map();
@@ -301,6 +305,32 @@ assert.ok(Number(board.attributes.viewBox.split(' ')[2]) < previousWidth);
 touch('pointerup', 3, 150, 300);
 touch('pointerup', 4, 330, 300);
 assert.equal(routes().length, 2, 'pinch must not lay another track');
+
+let nativeSelectionPrevented = false;
+board.dispatch('touchstart', { preventDefault() { nativeSelectionPrevented = true; } });
+assert.equal(nativeSelectionPrevented, true, 'long pressing the map does not initiate native text selection');
+// A native gesture may cancel only one touch; no stale second touch may trigger phantom pinch.
+touch('pointerdown', 31, 110, 300);
+touch('pointerdown', 32, 280, 300);
+touch('pointercancel', 31, 110, 300);
+const canceledGestureWidth = Number(board.attributes.viewBox.split(' ')[2]);
+touch('pointerdown', 33, 145, 300);
+touch('pointermove', 33, 180, 300);
+assert.equal(Number(board.attributes.viewBox.split(' ')[2]), canceledGestureWidth,
+  'one finger after pointer cancellation must not pinch-zoom');
+touch('pointerup', 33, 180, 300);
+touch('pointerup', 32, 280, 300);
+
+// If WebKit swallowed pointerup entirely, isPrimary identifies the next fresh gesture.
+touch('pointerdown', 34, 100, 300);
+board.dispatch('pointerdown', { pointerType: 'touch', pointerId: 35, isPrimary: true,
+  clientX: 140, clientY: 300, target: board, preventDefault() {} });
+const recoveredGestureWidth = Number(board.attributes.viewBox.split(' ')[2]);
+touch('pointermove', 35, 185, 300);
+assert.equal(Number(board.attributes.viewBox.split(' ')[2]), recoveredGestureWidth,
+  'fresh primary touch clears a lost pointer without phantom pinch');
+touch('pointerup', 35, 185, 300);
+windowMock.dispatch('blur');
 
 // Map and blank mode have independent routes; blank also requires a station.
 nodes['#map-mode'].value = 'blank';

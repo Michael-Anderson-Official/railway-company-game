@@ -16,7 +16,17 @@
     * { box-sizing: border-box; }
     html, body { touch-action: manipulation; }
     body { margin: 0; min-width: 320px; }
-    .app { display: flex; flex-direction: column; height: 100dvh; min-height: 400px; touch-action: manipulation; }
+    .app {
+      display: flex; flex-direction: column; height: 100dvh; min-height: 400px;
+      touch-action: manipulation;
+      -webkit-user-select: none; user-select: none;
+      -webkit-touch-callout: none;
+    }
+    /* 地図の長押しでは文字選択させず、駅名・路線名などの入力だけ通常どおり編集可能にする。 */
+    .app input, .app textarea, .app [contenteditable="true"] {
+      -webkit-user-select: text; user-select: text;
+      -webkit-touch-callout: default;
+    }
     .header {
       display: flex; align-items: center; justify-content: space-between; gap: 16px;
       padding: 15px 24px; background: #fff; border-bottom: 1px solid #e6eaf0;
@@ -55,7 +65,7 @@
     .length-control select:focus-visible { outline: 3px solid #86b3ff; outline-offset: 2px; }
     .tool-hint { flex: 1 1 120px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 11px; color: #798493; }
     .workspace { position: relative; flex: 1; min-height: 0; overflow: hidden; background: #fff; }
-    #board { display: block; width: 100%; height: 100%; touch-action: none; }
+    #board { display: block; width: 100%; height: 100%; touch-action: none; -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
     #board.placing { cursor: crosshair; }
     #board.placing-depot { cursor: crosshair; }
     #board.laying-track { cursor: crosshair; }
@@ -4021,6 +4031,12 @@
         followRunningTrain();
       });
 
+      // iOS Safariの長押し文字選択・虫眼鏡を地図上だけ抑止する。
+      // 入力欄や設定パネルには適用しないので、テキスト編集は維持される。
+      svg.addEventListener('touchstart', event => event.preventDefault(), { passive: false });
+      svg.addEventListener('selectstart', event => event.preventDefault());
+      svg.addEventListener('contextmenu', event => event.preventDefault());
+
       svg.addEventListener('pointermove', event => {
         if (event.pointerType === 'touch') {
           const touch = touches.get(event.pointerId);
@@ -4092,6 +4108,18 @@
         const hitStation = stationFromEvent(event);
         const hitDepot = !layingTrack ? depotFromEvent(event) : null;
         if (event.pointerType === 'touch') {
+          // OSの文字選択などでpointerupを受け損ねても、次の最初の指で復旧する。
+          if (event.isPrimary && touches.size) {
+            touches.clear();
+            pinchStart = null;
+            panStart = null;
+            pendingTouchPlacement = null;
+            pendingDepotTap = null;
+            stationDragStart = null;
+            rotationDragStart = null;
+            depotDragStart = null;
+            depotRotationDragStart = null;
+          }
           touches.set(event.pointerId, { x: event.clientX, y: event.clientY });
           svg.setPointerCapture(event.pointerId);
           if (touches.size === 1 && hitDepotGrip) {
@@ -4200,7 +4228,8 @@
         event.preventDefault();
       });
       svg.addEventListener('pointercancel', event => {
-        touches.delete(event.pointerId);
+        // Safariがネイティブジェスチャーに切り替えたら指の数を持ち越さない。
+        touches.clear();
         if (stationDragStart?.pointerId === event.pointerId) stationDragStart = null;
         if (rotationDragStart?.pointerId === event.pointerId) rotationDragStart = null;
         if (depotDragStart?.pointerId === event.pointerId) depotDragStart = null;
@@ -4210,8 +4239,20 @@
         pinchStart = null;
         panStart = null;
         mousePanStart = null;
-        beginPinch();
         preview.setAttribute('visibility', 'hidden');
+      });
+
+      window.addEventListener('blur', () => {
+        touches.clear();
+        pinchStart = null;
+        panStart = null;
+        mousePanStart = null;
+        pendingTouchPlacement = null;
+        pendingDepotTap = null;
+        stationDragStart = null;
+        rotationDragStart = null;
+        depotDragStart = null;
+        depotRotationDragStart = null;
       });
 
       window.addEventListener('resize', fitCanvas);
