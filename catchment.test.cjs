@@ -47,6 +47,7 @@ const nodes = Object.fromEntries([
   '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#auto-route-warnings', '#route-list', '#waypoint-section', '#waypoint-pick', '#waypoint-undo', '#waypoint-clear', '#waypoint-status', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#station-editor', '#selected-station-info', '#station-angle', '#station-angle-value',
+  '#station-delete-request', '#station-delete-confirm', '#station-delete-message', '#station-delete-confirm-button', '#station-delete-cancel',
   '#station-name', '#station-interchange', '#deselect-station', '#zoom-in', '#zoom-out', '#follow-train', '#demand-overview', '#station-demand',
   '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
   '#track-editor', '#track-origin', '#track-route', '#track-destination', '#build-track', '#track-validation',
@@ -149,6 +150,12 @@ async function run() {
   nodes['#station-name'].value = 'テスト新駅';
   nodes['#station-name'].dispatch('input');
   assert.equal(nodes['#placed'].children[0].children[2].textContent, 'テスト新駅', 'names work in blank mode');
+  nodes['#station-delete-request'].dispatch('click');
+  assert.equal(nodes['#placed'].children.length, 1, 'station remains until removal is confirmed');
+  nodes['#station-delete-confirm-button'].dispatch('click');
+  assert.equal(nodes['#placed'].children.length, 0, 'station deletion also works on a blank canvas');
+  assert.match(nodes['#demand-overview'].textContent, /設置駅2駅・潜在利用人口 320人/,
+    'deleting a blank-map station leaves citywide catchment results unchanged');
   console.log('Station naming in both modes, 2025 population mesh, 400/600/800m weights, no double-counting and drag update OK');
 }
 

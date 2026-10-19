@@ -49,6 +49,7 @@ const ids = [
   '#route-tool', '#route-manager', '#route-close', '#route-edit-target', '#route-name', '#route-code', '#route-save', '#route-manager-status', '#auto-route-warnings', '#route-list', '#waypoint-section', '#waypoint-pick', '#waypoint-undo', '#waypoint-clear', '#waypoint-status', '#service-tool', '#service-manager', '#service-close', '#service-edit-target', '#service-name', '#service-route', '#service-stops', '#service-save', '#service-status', '#service-list',
   '#fleet-preview', '#vehicle-hero', '#vehicle-illustration-caption', '#fleet-stats', '#fleet-description', '#vehicle-run', '#vehicle-stop', '#vehicle-emergency', '#vehicle-status', '#train-hud',
   '#hint', '#map-data', '#map-credit', '#station-editor', '#selected-station-info',
+  '#station-delete-request', '#station-delete-confirm', '#station-delete-message', '#station-delete-confirm-button', '#station-delete-cancel',
   '#station-name', '#station-interchange', '#station-angle', '#station-angle-value', '#station-demand',
   '#station-route', '#station-route-number', '#station-route-save', '#station-route-list', '#station-route-status',
   '#demand-overview', '#deselect-station', '#zoom-in', '#zoom-out', '#follow-train',

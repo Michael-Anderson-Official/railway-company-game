@@ -208,6 +208,15 @@
     .station-route-status.invalid, .route-manager-status.invalid, .service-status.invalid { color: #b32838; }
     .station-interchange { margin: -1px 0 9px; color: #7644ac; font-size: 12px; font-weight: 750; }
     .station-interchange[hidden] { display: none; }
+    .station-delete-actions { margin-top: 12px; padding-top: 10px; border-top: 1px solid #e4edf9; }
+    .station-delete-actions button { min-height: 40px; border: 1px solid #c44753; border-radius: 8px; background: #fff; color: #a82736; padding: 8px 12px; font: inherit; font-size: 13px; font-weight: 800; cursor: pointer; }
+    .station-delete-actions button:focus-visible { outline: 3px solid #f2a7ae; outline-offset: 2px; }
+    .station-delete-confirm { display: grid; gap: 8px; margin-top: 8px; padding: 10px; border: 1px solid #eabdc2; border-radius: 9px; background: #fff6f7; }
+    .station-delete-confirm[hidden] { display: none; }
+    .station-delete-confirm p { margin: 0; color: #782331; font-size: 12px; line-height: 1.6; }
+    .station-delete-confirm .station-delete-buttons { display: flex; gap: 7px; flex-wrap: wrap; }
+    .station-delete-confirm #station-delete-confirm-button { background: #b52d40; color: #fff; }
+    .station-delete-confirm #station-delete-cancel { border-color: #c8d4e0; color: #34526e; }
     .editor-rotation { display: flex; align-items: center; gap: 8px; }
     .editor-rotation label { flex: none; color: #516176; font-size: 12px; font-weight: 700; }
     .editor-rotation input { flex: 1; min-width: 48px; accent-color: #2158a3; }
@@ -579,6 +588,16 @@
           <p class="station-route-status" id="station-route-status" role="status" aria-live="polite"></p>
         </section>
         <div id="station-demand" class="station-demand" hidden></div>
+        <div class="station-delete-actions">
+          <button id="station-delete-request" type="button">この駅を削除</button>
+          <div id="station-delete-confirm" class="station-delete-confirm" hidden>
+            <p id="station-delete-message"></p>
+            <div class="station-delete-buttons">
+              <button id="station-delete-confirm-button" type="button">駅と関連線路を削除する</button>
+              <button id="station-delete-cancel" type="button">キャンセル</button>
+            </div>
+          </div>
+        </div>
       </div>
       <div class="track-editor" id="track-editor" hidden>
         <p class="track-editor-title">複線の敷設</p>
@@ -835,6 +854,8 @@
       const stationAngle = document.querySelector('#station-angle');
       const stationAngleValue = document.querySelector('#station-angle-value');
       const stationDemand = document.querySelector('#station-demand');
+      const stationDeleteConfirmation = document.querySelector('#station-delete-confirm');
+      const stationDeleteMessage = document.querySelector('#station-delete-message');
       const trackEditor = document.querySelector('#track-editor');
       const trackOriginSelect = document.querySelector('#track-origin');
       const trackRouteSelect = document.querySelector('#track-route');
@@ -984,6 +1005,7 @@
       let selectedCars = Number(lengthSelect.value);
       let nextStationId = 1;
       let selectedStationId = null;
+      let pendingStationDeletionId = null;
       let stationDragStart = null;
       let rotationDragStart = null;
       let canvasSize = { width: 1440, height: 820 };
@@ -3692,6 +3714,80 @@
         return positions.find(position => position.id === selectedStationId && isOnCurrentLevel(position));
       }
 
+      function cancelStationDeletion() {
+        pendingStationDeletionId = null;
+        stationDeleteConfirmation.hidden = true;
+      }
+
+      function requestStationDeletion() {
+        const position = selectedStation();
+        if (!position) return;
+        pendingStationDeletionId = position.id;
+        stationDeleteMessage.textContent = `「${position.name}」を削除します。接続線路は撤去または再敷設され、駅番号・種別の停車設定も更新されます。元には戻せません。`;
+        stationDeleteConfirmation.hidden = false;
+        document.querySelector('#station-delete-confirm-button').focus?.();
+      }
+
+      function deleteSelectedStation() {
+        const position = selectedStation();
+        if (!position || pendingStationDeletionId !== position.id) return;
+        const id = position.id;
+        const name = position.name;
+        // 走行中の車両が削除済みの線路を参照しないよう、編集前に停止する。
+        if (vehicleRun) stopVehicleRun(false);
+        if (depotRun) cancelDepotRun();
+        const affectedSectionIds = new Set(trackSections.filter(section =>
+          (section.source.type === 'station' && section.source.stationId === id) ||
+          (section.targetStation?.type === 'station' && section.targetStation.stationId === id))
+          .map(section => section.id));
+        // 撤去する線路の先端や分岐点から延びる線路も孤立させない。
+        let changed;
+        do {
+          changed = false;
+          for (const section of trackSections) {
+            if (affectedSectionIds.has(section.id)) continue;
+            if ((section.source.type === 'section' && affectedSectionIds.has(section.source.sectionId)) ||
+                (section.targetStation?.type === 'junction' && affectedSectionIds.has(section.targetStation.sectionId))) {
+              affectedSectionIds.add(section.id);
+              changed = true;
+            }
+          }
+        } while (changed);
+        for (const section of trackSections) {
+          if (affectedSectionIds.has(section.id) && section.autoKey?.startsWith('depot:'))
+            trackWaypoints.delete(section.autoKey);
+        }
+        for (let i = trackSections.length - 1; i >= 0; i--) {
+          if (affectedSectionIds.has(trackSections[i].id)) trackSections.splice(i, 1);
+        }
+        for (const key of new Set([...automaticTrackIds.keys(), ...trackWaypoints.keys()])) {
+          const routePair = /^route:\d+:(\d+):(\d+)$/.exec(key);
+          if (routePair && (Number(routePair[1]) === id || Number(routePair[2]) === id)) {
+            automaticTrackIds.delete(key);
+            trackWaypoints.delete(key);
+          }
+        }
+        positions.splice(positions.findIndex(item => item.id === id), 1);
+        for (const service of services) service.stopIds = service.stopIds.filter(stationId => stationId !== id);
+        draftServiceStops.delete(id);
+        demandRevision++;
+        cancelStationDeletion();
+        selectedStationId = null;
+        stationDragStart = null;
+        rotationDragStart = null;
+        trackDestination = null;
+        trackTargetStation = null;
+        connectionDialog.hidden = true;
+        hideInterchangeDialog();
+        automaticTracksDirty = true;
+        redrawPlaced();
+        syncTrackOrigins();
+        updateStationEditor();
+        updateServiceSelectors();
+        renderServiceList();
+        hint.textContent = `「${name}」を削除しました。残る駅の複線・車両基地への接続を再計算しました。`;
+      }
+
       function updateStationEditor() {
         const position = selectedStation();
         stationEditor.hidden = layingTrack || !position;
@@ -3711,6 +3807,7 @@
       }
 
       function selectStation(id) {
+        cancelStationDeletion();
         if (id !== null) {
           closeRouteManager();
           selectedDepotId = null;
@@ -4344,6 +4441,9 @@
         updateStationRouteChoice();
       });
       stationRouteSave.addEventListener('click', saveStationRouteNumber);
+      document.querySelector('#station-delete-request').addEventListener('click', requestStationDeletion);
+      document.querySelector('#station-delete-confirm-button').addEventListener('click', deleteSelectedStation);
+      document.querySelector('#station-delete-cancel').addEventListener('click', cancelStationDeletion);
       fleetCloseButton.addEventListener('click', () => {
         fleetPanel.hidden = true;
         fleetButton.setAttribute('aria-expanded', 'false');
